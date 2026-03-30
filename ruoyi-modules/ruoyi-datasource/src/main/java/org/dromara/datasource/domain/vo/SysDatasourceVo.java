@@ -75,6 +75,21 @@ public class SysDatasourceVo implements Serializable {
     private String schemaName;
 
     /**
+     * 用户名
+     */
+    private String username;
+
+    /**
+     * 密码
+     */
+    private String password;
+
+    /**
+     * 额外连接参数
+     */
+    private String connectionParams;
+
+    /**
      * 数仓层标记
      */
     @ExcelProperty(value = "数仓层", converter = ExcelDictConvert.class)

@@ -7,7 +7,7 @@ import type { Datasource } from '#/api/system/datasource/model';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { getVxePopupContainer } from '@vben/utils';
 
-import { Modal, Popconfirm, Space } from 'ant-design-vue';
+import { Modal, Popconfirm, Space, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
@@ -15,6 +15,7 @@ import {
   datasourceExport,
   datasourceList,
   datasourceRemove,
+  datasourceTest,
 } from '#/api/system/datasource';
 import { TableSwitch } from '#/components/table';
 import { commonDownloadExcel } from '#/utils/file/download';
@@ -102,6 +103,34 @@ function handleMultiDelete() {
 function handleDownloadExcel() {
   commonDownloadExcel(datasourceExport, '数据源数据', tableApi.formApi.form.values);
 }
+
+/** 列表测试连接 */
+async function handleRowTest(row: Datasource) {
+  if (!row.dsId) {
+    message.warning('请选择有效的数据源');
+    return;
+  }
+  const hide = message.loading('正在测试连接...');
+  try {
+    const result = await datasourceTest({
+      dsId: row.dsId,
+      dsType: row.dsType,
+      host: row.host,
+      port: row.port,
+      databaseName: row.databaseName,
+      schemaName: row.schemaName,
+    });
+    hide();
+    if (result.success) {
+      message.success(`连接成功！版本：${result.databaseVersion || '未知'}，耗时：${result.elapsedMs}ms`);
+    } else {
+      message.error(`连接失败：${result.message}`);
+    }
+  } catch (error: any) {
+    hide();
+    message.error(`连接异常：${error?.message || '未知错误'}`);
+  }
+}
 </script>
 
 <template>
@@ -143,6 +172,12 @@ function handleDownloadExcel() {
       </template>
       <template #action="{ row }">
         <Space>
+          <ghost-button
+            v-access:code="['system:ds:test']"
+            @click.stop="handleRowTest(row)"
+          >
+            测试
+          </ghost-button>
           <ghost-button
             v-access:code="['system:ds:edit']"
             @click.stop="handleEdit(row)"

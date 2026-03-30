@@ -11,6 +11,7 @@ import org.dromara.common.log.enums.BusinessType;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.web.core.BaseController;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.datasource.connection.ConnectionTestResultVO;
 import org.dromara.datasource.domain.bo.SysDatasourceBo;
 import org.dromara.datasource.domain.vo.SysDatasourceVo;
@@ -69,7 +70,8 @@ public class SysDatasourceController extends BaseController {
     @Log(title = "数据源", businessType = BusinessType.INSERT)
     @PostMapping
     public R<Long> add(@Validated @RequestBody SysDatasourceBo bo) {
-        if (datasourceService.getDatasourceByCode(bo.getDsCode()) != null) {
+        if (StringUtils.isNotBlank(bo.getDsCode())
+            && datasourceService.getDatasourceByCode(bo.getDsCode()) != null) {
             return R.fail("数据源编码已存在");
         }
         return R.ok(datasourceService.insertDatasource(bo));

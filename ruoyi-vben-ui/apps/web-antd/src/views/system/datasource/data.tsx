@@ -143,7 +143,7 @@ export const columns: VxeGridProps['columns'] = [
     fixed: 'right',
     slots: { default: 'action' },
     title: '操作',
-    width: 180,
+    width: 220,
   },
 ];
 
@@ -159,6 +159,18 @@ export const drawerSchema: FormSchemaGetter = () => [
     label: '数据源ID',
   },
   {
+    component: 'Divider',
+    componentProps: {
+      orientation: 'center',
+    },
+    fieldName: 'divider-basic',
+    formItemClass: 'col-span-2',
+    hideLabel: true,
+    renderComponentContent: () => ({
+      default: () => '基础信息',
+    }),
+  },
+  {
     component: 'Input',
     fieldName: 'dsName',
     label: '数据源名称',
@@ -167,6 +179,7 @@ export const drawerSchema: FormSchemaGetter = () => [
   {
     component: 'Input',
     fieldName: 'dsCode',
+    help: '留空时按类型自动生成全局唯一编码',
     label: '数据源编码',
     rules: 'required',
   },
@@ -178,6 +191,36 @@ export const drawerSchema: FormSchemaGetter = () => [
     fieldName: 'dsType',
     label: '数据源类型',
     rules: 'required',
+  },
+  {
+    component: 'Select',
+    componentProps: {
+      options: dataLayerOptions,
+    },
+    fieldName: 'dataLayer',
+    label: '数仓层',
+  },
+  {
+    component: 'Select',
+    componentProps: {
+      options: getDictOptions(DictEnum.SYS_NORMAL_DISABLE),
+    },
+    defaultValue: '0',
+    fieldName: 'status',
+    label: '状态',
+    rules: 'required',
+  },
+  {
+    component: 'Divider',
+    componentProps: {
+      orientation: 'center',
+    },
+    fieldName: 'divider-connection',
+    formItemClass: 'col-span-2',
+    hideLabel: true,
+    renderComponentContent: () => ({
+      default: () => '连接信息',
+    }),
   },
   {
     component: 'Input',
@@ -194,8 +237,8 @@ export const drawerSchema: FormSchemaGetter = () => [
   {
     component: 'Input',
     fieldName: 'databaseName',
+    help: '可不填，按数据源类型确定是否需要',
     label: '数据库名',
-    rules: 'required',
   },
   {
     component: 'Input',
@@ -215,34 +258,36 @@ export const drawerSchema: FormSchemaGetter = () => [
   },
   {
     component: 'InputPassword',
+    componentProps: {
+      visibilityToggle: true,
+    },
     fieldName: 'password',
     label: '密码',
     rules: 'required',
   },
   {
+    component: 'Divider',
+    componentProps: {
+      orientation: 'center',
+    },
+    fieldName: 'divider-advanced',
+    formItemClass: 'col-span-2',
+    hideLabel: true,
+    renderComponentContent: () => ({
+      default: () => '高级参数',
+    }),
+  },
+  {
     component: 'Textarea',
+    componentProps: {
+      autoSize: { minRows: 3, maxRows: 6 },
+      placeholder:
+        '支持按行 key=value，或 useSSL=false&serverTimezone=UTC，也可输入 JSON：{"connectTimeout":5000}',
+    },
     fieldName: 'connectionParams',
     label: '连接参数',
-    help: '额外JDBC连接参数，JSON格式，如：{"connectTimeout":5000}',
+    help: '支持 JSON / 按行 / querystring 三种格式',
     formItemClass: 'col-span-2',
-  },
-  {
-    component: 'Select',
-    componentProps: {
-      options: dataLayerOptions,
-    },
-    fieldName: 'dataLayer',
-    label: '数仓层',
-  },
-  {
-    component: 'Select',
-    componentProps: {
-      options: getDictOptions(DictEnum.SYS_NORMAL_DISABLE),
-    },
-    defaultValue: '0',
-    fieldName: 'status',
-    label: '状态',
-    rules: 'required',
   },
   {
     component: 'Textarea',

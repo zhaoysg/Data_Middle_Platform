@@ -35,7 +35,6 @@ public class SysDatasourceBo extends BaseEntity {
     /**
      * 数据源编码
      */
-    @NotBlank(message = "数据源编码不能为空")
     @Size(max = 50, message = "数据源编码长度不能超过{max}个字符")
     private String dsCode;
 
@@ -59,7 +58,6 @@ public class SysDatasourceBo extends BaseEntity {
     /**
      * 数据库名
      */
-    @NotBlank(message = "数据库名称不能为空")
     private String databaseName;
 
     /**

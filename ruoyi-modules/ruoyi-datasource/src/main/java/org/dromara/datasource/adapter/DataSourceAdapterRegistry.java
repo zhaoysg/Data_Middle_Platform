@@ -44,12 +44,14 @@ public class DataSourceAdapterRegistry {
      * @param schema    Schema名
      * @param username  用户名
      * @param password  密码
+     * @param connectionParams 连接参数
      * @return 适配器实例
      */
     public DataSourceAdapter getOrCreateAdapter(Long dsId, String dsType,
                                                String host, Integer port,
                                                String database, String schema,
-                                               String username, String password) {
+                                               String username, String password,
+                                               String connectionParams) {
         DataSourceAdapter cached = dsIdAdapterMap.get(dsId);
         if (cached != null) {
             return cached;
@@ -68,7 +70,8 @@ public class DataSourceAdapterRegistry {
                 }
 
                 dataSourceManager.registerDataSource(dsId, dsType, host, port, database, schema,
-                    username, password, typeEnum.getUrlTemplate(), typeEnum.getDriverClass());
+                    username, password, connectionParams,
+                    typeEnum.getUrlTemplate(), typeEnum.getDriverClass());
             }
 
             DataSourceAdapter adapter = createAdapterInstance(dsType);

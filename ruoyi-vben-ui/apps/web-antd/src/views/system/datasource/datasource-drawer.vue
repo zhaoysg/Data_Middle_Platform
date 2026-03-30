@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Datasource } from '#/api/system/datasource/model';
 
-import { computed, ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 
 import { useVbenDrawer } from '@vben/common-ui';
 import { $t } from '@vben/locales';
@@ -37,8 +37,42 @@ const [BasicForm, formApi] = useVbenForm({
   layout: 'vertical',
   schema: drawerSchema(),
   showDefaultActions: false,
-  wrapperClass: 'grid-cols-2 gap-x-4',
+  wrapperClass: 'grid-cols-2 gap-x-6 gap-y-2',
 });
+
+const lastAutoCode = ref<string | null>(null);
+
+function generateDatasourceCode(dsType: string) {
+  const now = new Date();
+  const pad = (value: number) => String(value).padStart(2, '0');
+  const timestamp = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+  const random = Math.floor(Math.random() * 9000) + 1000;
+  return `${dsType.toUpperCase()}_${timestamp}_${random}`;
+}
+
+watch(
+  () => formApi.form?.values?.dsType as string | undefined,
+  (dsType) => {
+    if (!dsType) {
+      return;
+    }
+    const currentCode = formApi.form?.values?.dsCode as string | undefined;
+    if (!currentCode || currentCode === lastAutoCode.value) {
+      const generated = generateDatasourceCode(dsType);
+      lastAutoCode.value = generated;
+      formApi.setFieldValue('dsCode', generated);
+    }
+  },
+);
+
+watch(
+  () => formApi.form?.values?.dsCode as string | undefined,
+  (value) => {
+    if (value && value !== lastAutoCode.value) {
+      lastAutoCode.value = null;
+    }
+  },
+);
 
 async function customFormValueGetter() {
   return await defaultFormValueGetter(formApi)();
@@ -84,6 +118,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
     }
     drawerApi.drawerLoading(true);
 
+    lastAutoCode.value = null;
     const { id } = drawerApi.getData() as { id?: number | string };
     isUpdate.value = !!id;
 
@@ -150,11 +185,12 @@ async function handleConfirm() {
 async function handleClosed() {
   await formApi.resetForm();
   resetInitialized();
+  lastAutoCode.value = null;
 }
 </script>
 
 <template>
-  <BasicDrawer :title="title" class="w-[800px]">
+  <BasicDrawer :title="title" class="w-[920px]">
     <BasicForm />
     <template #append-footer>
       <a-button

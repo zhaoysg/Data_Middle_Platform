@@ -166,6 +166,12 @@ mybatis-encryptor:
   publicKey:
   privateKey:
 
+# 数据源敏感信息加密
+datasource:
+  encrypt:
+    # AES 秘钥长度要求为 16/24/32 位，建议通过环境变量配置
+    key: ${DATASOURCE_ENCRYPT_KEY:}
+
 # api接口加密
 api-decrypt:
   # 是否开启全局接口加密

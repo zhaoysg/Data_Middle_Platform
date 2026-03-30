@@ -27,10 +27,12 @@ import org.dromara.datasource.enums.DataSourceTypeEnum;
 import org.dromara.datasource.manager.DynamicDataSourceManager;
 import org.dromara.datasource.mapper.SysDatasourceMapper;
 import org.dromara.datasource.service.ISysDatasourceService;
+import org.dromara.datasource.support.DatasourceCryptoSupport;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
@@ -46,9 +48,12 @@ import java.util.concurrent.ThreadLocalRandom;
 @DS("bigdata")
 public class SysDatasourceServiceImpl implements ISysDatasourceService {
 
+    private static final DateTimeFormatter DS_CODE_FORMATTER = DateTimeFormatter.ofPattern("yyyyMMddHHmmss");
+
     private final SysDatasourceMapper baseMapper;
     private final DynamicDataSourceManager dataSourceManager;
     private final DataSourceAdapterRegistry adapterRegistry;
+    private final DatasourceCryptoSupport cryptoSupport;
 
     @Override
     @DataPermission({
@@ -56,6 +61,7 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
     })
     public TableDataInfo<SysDatasourceVo> pageDatasourceList(SysDatasourceBo bo, PageQuery pageQuery) {
         Page<SysDatasourceVo> page = baseMapper.selectVoPage(pageQuery.build(), buildQueryWrapper(bo));
+        maskSensitiveFields(page.getRecords());
         return TableDataInfo.build(page);
     }
 
@@ -64,7 +70,9 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         @DataColumn(key = "deptName", value = "dept_id")
     })
     public List<SysDatasourceVo> listDatasource(SysDatasourceBo bo) {
-        return baseMapper.selectVoList(buildQueryWrapper(bo));
+        List<SysDatasourceVo> list = baseMapper.selectVoList(buildQueryWrapper(bo));
+        maskSensitiveFields(list);
+        return list;
     }
 
     private Wrapper<SysDatasource> buildQueryWrapper(SysDatasourceBo bo) {
@@ -88,6 +96,7 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         if (datasource == null) {
             throw new ServiceException("数据源不存在或无权限访问");
         }
+        datasource.setPassword(cryptoSupport.decryptPassword(datasource.getPassword()));
         return datasource;
     }
 
@@ -103,9 +112,8 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long insertDatasource(SysDatasourceBo bo) {
-        if (!checkDsCodeUnique(bo)) {
-            throw new ServiceException("数据源编码已存在");
-        }
+        ensureDsCodeForInsert(bo);
+        encryptSensitiveFields(bo);
         SysDatasource ds = MapstructUtils.convert(bo, SysDatasource.class);
         baseMapper.insert(ds);
         return ds.getDsId();
@@ -120,6 +128,9 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         if (ObjectUtil.isNull(bo.getDsId())) {
             throw new ServiceException("数据源ID不能为空");
         }
+        if (StringUtils.isBlank(bo.getDsCode())) {
+            throw new ServiceException("数据源编码不能为空");
+        }
         if (!DataPermissionHelper.ignore(() -> checkDsCodeUnique(bo))) {
             throw new ServiceException("数据源编码已存在");
         }
@@ -128,6 +139,7 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         if (dataSourceManager.isRegistered(bo.getDsId())) {
             adapterRegistry.unregisterAdapter(bo.getDsId());
         }
+        encryptSensitiveFields(bo);
         SysDatasource ds = MapstructUtils.convert(bo, SysDatasource.class);
         return baseMapper.updateById(ds);
     }
@@ -150,6 +162,15 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
     public ConnectionTestResultVO testConnection(SysDatasourceBo bo) {
         long start = System.currentTimeMillis();
         try {
+            prepareTestConnectionBo(bo);
+            if (StringUtils.isBlank(bo.getDsType())) {
+                return ConnectionTestResultVO.builder()
+                    .success(false)
+                    .message("数据源类型不能为空，请先完善数据源信息")
+                    .elapsedMs(System.currentTimeMillis() - start)
+                    .testTime(LocalDateTime.now())
+                    .build();
+            }
             DataSourceTypeEnum typeEnum = DataSourceTypeEnum.fromCode(bo.getDsType());
             if (typeEnum == null) {
                 return ConnectionTestResultVO.builder()
@@ -171,6 +192,7 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
                 bo.getSchemaName(),
                 bo.getUsername(),
                 bo.getPassword(),
+                bo.getConnectionParams(),
                 typeEnum.getUrlTemplate(),
                 typeEnum.getDriverClass()
             );
@@ -180,7 +202,8 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
                     tempDsId, bo.getDsType(),
                     bo.getHost(), bo.getPort(),
                     bo.getDatabaseName(), bo.getSchemaName(),
-                    bo.getUsername(), bo.getPassword()
+                    bo.getUsername(), bo.getPassword(),
+                    bo.getConnectionParams()
                 );
                 boolean success = adapter.testConnection();
                 long elapsed = System.currentTimeMillis() - start;
@@ -271,11 +294,13 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         @DataColumn(key = "deptName", value = "dept_id")
     })
     public List<SysDatasourceVo> listEnabledDatasource() {
-        return baseMapper.selectVoList(
+        List<SysDatasourceVo> list = baseMapper.selectVoList(
             Wrappers.<SysDatasource>lambdaQuery()
                 .eq(SysDatasource::getStatus, SystemConstants.NORMAL)
                 .orderByAsc(SysDatasource::getDsId)
         );
+        maskSensitiveFields(list);
+        return list;
     }
 
     @Override
@@ -284,11 +309,13 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
     })
     public List<String> getTables(Long dsId, String schema) {
         SysDatasource ds = getDatasourceOrThrow(dsId, true);
+        ds.setPassword(cryptoSupport.decryptPassword(ds.getPassword()));
         DataSourceAdapter adapter = adapterRegistry.getOrCreateAdapter(
             dsId, ds.getDsType(),
             ds.getHost(), ds.getPort(),
             ds.getDatabaseName(), ds.getSchemaName(),
-            ds.getUsername(), ds.getPassword()
+            ds.getUsername(), ds.getPassword(),
+            ds.getConnectionParams()
         );
         if (StringUtils.isNotBlank(schema)) {
             return adapter.getTables(schema);
@@ -302,11 +329,13 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
     })
     public List<?> getTableColumns(Long dsId, String tableName, String schema) {
         SysDatasource ds = getDatasourceOrThrow(dsId, true);
+        ds.setPassword(cryptoSupport.decryptPassword(ds.getPassword()));
         DataSourceAdapter adapter = adapterRegistry.getOrCreateAdapter(
             dsId, ds.getDsType(),
             ds.getHost(), ds.getPort(),
             ds.getDatabaseName(), ds.getSchemaName(),
-            ds.getUsername(), ds.getPassword()
+            ds.getUsername(), ds.getPassword(),
+            ds.getConnectionParams()
         );
         if (StringUtils.isNotBlank(schema)) {
             return adapter.getColumns(schema, tableName);
@@ -324,6 +353,78 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         return !exist;
     }
 
+    private void ensureDsCodeForInsert(SysDatasourceBo bo) {
+        boolean autoGenerated = false;
+        if (StringUtils.isBlank(bo.getDsCode())) {
+            if (StringUtils.isBlank(bo.getDsType())) {
+                throw new ServiceException("数据源类型不能为空");
+            }
+            bo.setDsCode(generateDsCode(bo.getDsType()));
+            autoGenerated = true;
+        } else {
+            bo.setDsCode(StringUtils.trim(bo.getDsCode()));
+        }
+        if (!autoGenerated && !checkDsCodeUnique(bo)) {
+            throw new ServiceException("数据源编码已存在");
+        }
+        int attempts = 0;
+        while (autoGenerated && !checkDsCodeUnique(bo)) {
+            if (attempts++ > 10) {
+                throw new ServiceException("生成数据源编码失败，请稍后重试");
+            }
+            bo.setDsCode(generateDsCode(bo.getDsType()));
+        }
+    }
+
+    private String generateDsCode(String dsType) {
+        String type = StringUtils.toRootUpperCase(StringUtils.blankToDefault(dsType, "DS"));
+        String timestamp = DS_CODE_FORMATTER.format(LocalDateTime.now());
+        int random = ThreadLocalRandom.current().nextInt(1000, 9999);
+        return type + "_" + timestamp + "_" + random;
+    }
+
+    private void encryptSensitiveFields(SysDatasourceBo bo) {
+        if (StringUtils.isNotBlank(bo.getPassword())) {
+            bo.setPassword(cryptoSupport.encryptPassword(bo.getPassword()));
+        }
+    }
+
+    private void prepareTestConnectionBo(SysDatasourceBo bo) {
+        if (bo.getDsId() == null) {
+            if (cryptoSupport.isEncrypted(bo.getPassword())) {
+                bo.setPassword(cryptoSupport.decryptPassword(bo.getPassword()));
+            }
+            return;
+        }
+        SysDatasource ds = getDatasourceOrThrow(bo.getDsId(), false);
+        if (StringUtils.isBlank(bo.getDsType())) {
+            bo.setDsType(ds.getDsType());
+        }
+        if (StringUtils.isBlank(bo.getHost())) {
+            bo.setHost(ds.getHost());
+        }
+        if (bo.getPort() == null) {
+            bo.setPort(ds.getPort());
+        }
+        if (StringUtils.isBlank(bo.getDatabaseName())) {
+            bo.setDatabaseName(ds.getDatabaseName());
+        }
+        if (StringUtils.isBlank(bo.getSchemaName())) {
+            bo.setSchemaName(ds.getSchemaName());
+        }
+        if (StringUtils.isBlank(bo.getUsername())) {
+            bo.setUsername(ds.getUsername());
+        }
+        if (StringUtils.isBlank(bo.getPassword())) {
+            bo.setPassword(cryptoSupport.decryptPassword(ds.getPassword()));
+        } else if (cryptoSupport.isEncrypted(bo.getPassword())) {
+            bo.setPassword(cryptoSupport.decryptPassword(bo.getPassword()));
+        }
+        if (StringUtils.isBlank(bo.getConnectionParams())) {
+            bo.setConnectionParams(ds.getConnectionParams());
+        }
+    }
+
     private SysDatasource getDatasourceOrThrow(Long dsId, boolean requireEnabled) {
         SysDatasource datasource = baseMapper.selectById(dsId);
         if (datasource == null) {
@@ -333,5 +434,16 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
             throw new ServiceException("数据源已停用，请先启用后再操作");
         }
         return datasource;
+    }
+
+    private void maskSensitiveFields(List<SysDatasourceVo> list) {
+        if (list == null || list.isEmpty()) {
+            return;
+        }
+        for (SysDatasourceVo item : list) {
+            item.setUsername(null);
+            item.setPassword(null);
+            item.setConnectionParams(null);
+        }
     }
 }

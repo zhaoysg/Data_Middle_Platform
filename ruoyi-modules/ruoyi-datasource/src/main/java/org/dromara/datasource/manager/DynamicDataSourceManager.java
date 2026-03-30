@@ -1,13 +1,16 @@
 package org.dromara.datasource.manager;
 
+import cn.hutool.json.JSONUtil;
 import com.zaxxer.hikari.HikariDataSource;
 import com.zaxxer.hikari.HikariPoolMXBean;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.datasource.enums.DataSourceTypeEnum;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
 
 import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
@@ -64,12 +67,14 @@ public class DynamicDataSourceManager {
      * @param schemaName Schema名（PostgreSQL专用，可为null）
      * @param username 用户名
      * @param password 密码
+     * @param connectionParams 连接参数
      * @param jdbcUrlTemplate JDBC URL模板
      * @param driverClass 驱动类名
      */
     public void registerDataSource(Long dsId, String dsType, String host, Integer port,
                                    String databaseName, String schemaName,
                                    String username, String password,
+                                   String connectionParams,
                                    String jdbcUrlTemplate, String driverClass) {
         try {
             if (configuredDataSources.containsKey(dsId)) {
@@ -80,7 +85,7 @@ public class DynamicDataSourceManager {
             HikariDataSource dataSource = new HikariDataSource();
             dataSource.setPoolName("dynamic-ds-" + dsId);
             dataSource.setDriverClassName(driverClass);
-            dataSource.setJdbcUrl(buildJdbcUrl(jdbcUrlTemplate, host, port, databaseName, dsType, schemaName));
+            dataSource.setJdbcUrl(buildJdbcUrl(jdbcUrlTemplate, host, port, databaseName, dsType, schemaName, connectionParams));
             dataSource.setUsername(username);
             dataSource.setPassword(password);
             dataSource.setMinimumIdle(5);
@@ -159,18 +164,120 @@ public class DynamicDataSourceManager {
      * 构建 JDBC URL
      */
     private String buildJdbcUrl(String urlTemplate, String host, Integer port,
-                                 String databaseName, String dsType, String schemaName) {
+                                 String databaseName, String dsType, String schemaName,
+                                 String connectionParams) {
         DataSourceTypeEnum typeEnum = DataSourceTypeEnum.fromCode(dsType);
         int targetPort = port != null && port > 0
             ? port
             : typeEnum != null ? typeEnum.getDefaultPort() : 3306;
-        String baseUrl = String.format(urlTemplate, host, targetPort, databaseName);
+        String safeDatabaseName = StringUtils.blankToDefault(databaseName, "");
+        String baseUrl = String.format(urlTemplate, host, targetPort, safeDatabaseName);
 
-        // PostgreSQL 支持 currentSchema 参数
-        if ("POSTGRESQL".equalsIgnoreCase(dsType) && schemaName != null && !schemaName.isBlank()) {
-            baseUrl = baseUrl + (baseUrl.contains("?") ? "&" : "?") + "currentSchema=" + schemaName.trim();
+        Map<String, String> params = parseConnectionParams(connectionParams);
+        if ("POSTGRESQL".equalsIgnoreCase(dsType) && StringUtils.isNotBlank(schemaName)) {
+            params.putIfAbsent("currentSchema", schemaName.trim());
         }
-        return baseUrl;
+        return appendParams(baseUrl, params, dsType);
+    }
+
+    private Map<String, String> parseConnectionParams(String connectionParams) {
+        Map<String, String> params = new LinkedHashMap<>();
+        if (StringUtils.isBlank(connectionParams)) {
+            return params;
+        }
+        String raw = connectionParams.trim();
+        if (JSONUtil.isTypeJSONObject(raw)) {
+            JSONUtil.parseObj(raw).forEach((key, value) -> {
+                if (key != null) {
+                    String paramKey = String.valueOf(key).trim();
+                    if (StringUtils.isBlank(paramKey)) {
+                        return;
+                    }
+                    params.put(paramKey, value == null ? "" : String.valueOf(value).trim());
+                }
+            });
+            return params;
+        }
+        String normalized = raw;
+        while (!normalized.isEmpty() && (normalized.startsWith("?") || normalized.startsWith("&") || normalized.startsWith(";"))) {
+            normalized = normalized.substring(1);
+        }
+        String[] lines = normalized.split("\\r?\\n");
+        for (String line : lines) {
+            if (StringUtils.isBlank(line)) {
+                continue;
+            }
+            String[] segments = line.split("[;&]");
+            for (String segment : segments) {
+                String item = segment.trim();
+                if (item.isEmpty()) {
+                    continue;
+                }
+                int idx = item.indexOf('=');
+                if (idx < 0) {
+                    idx = item.indexOf(':');
+                }
+                String key;
+                String value;
+                if (idx > 0) {
+                    key = item.substring(0, idx).trim();
+                    value = item.substring(idx + 1).trim();
+                } else {
+                    key = item.trim();
+                    value = "";
+                }
+                if (StringUtils.isBlank(key)) {
+                    continue;
+                }
+                params.put(key, value);
+            }
+        }
+        return params;
+    }
+
+    private String appendParams(String baseUrl, Map<String, String> params, String dsType) {
+        if (params == null || params.isEmpty()) {
+            return baseUrl;
+        }
+        boolean sqlServer = "SQLSERVER".equalsIgnoreCase(dsType);
+        String separator = sqlServer ? ";" : "&";
+        StringBuilder sb = new StringBuilder(baseUrl);
+        if (sqlServer) {
+            if (!baseUrl.endsWith(";")) {
+                sb.append(";");
+            }
+        } else {
+            if (baseUrl.contains("?")) {
+                if (!baseUrl.endsWith("?") && !baseUrl.endsWith("&")) {
+                    sb.append("&");
+                }
+            } else {
+                sb.append("?");
+            }
+        }
+        boolean appended = false;
+        for (Map.Entry<String, String> entry : params.entrySet()) {
+            if (StringUtils.isBlank(entry.getKey())) {
+                continue;
+            }
+            sb.append(entry.getKey())
+                .append("=")
+                .append(encodeParam(entry.getValue()))
+                .append(separator);
+            appended = true;
+        }
+        if (!appended) {
+            return baseUrl;
+        }
+        sb.setLength(sb.length() - separator.length());
+        return sb.toString();
+    }
+
+    private String encodeParam(String value) {
+        if (value == null) {
+            return "";
+        }
+        return value;
     }
 
     /**
