@@ -1,0 +1,52 @@
+spring:
+  application:
+    name: bagdatahouse-server
+
+  # 使用H2内存数据库进行测试
+  datasource:
+    driver-class-name: org.h2.Driver
+    url: jdbc:h2:mem:testdb;MODE=MySQL;DATABASE_TO_LOWER=TRUE;CASE_INSENSITIVE_IDENTIFIERS=TRUE
+    username: sa
+    password:
+    hikari:
+      maximum-pool-size: 5
+      minimum-idle: 1
+
+  # 初始化测试数据
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-test.sql
+      encoding: UTF-8
+
+  # 禁用Flyway（测试数据用SQL脚本初始化）
+  flyway:
+    enabled: false
+
+  # H2 Console
+  h2:
+    console:
+      enabled: true
+
+  # Redis（使用嵌入式Redis或禁用）
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+# MyBatis-Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.bagdatahouse.core.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+# 日志级别
+logging:
+  level:
+    com.bagdatahouse: DEBUG
+    org.springframework: INFO

@@ -1,0 +1,27 @@
+# 开发环境配置
+spring:
+  # 开发环境数据源
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://49.232.153.150:3366/bagdatahouse?useUnicode=true&characterEncoding=utf8&zeroDateTimeBehavior=convertToNull&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
+    username: root
+    password: sdfwer@re3f
+
+# JWT配置
+jwt:
+  secret: bagdatahouse-jwt-secret-key-dev
+  expiration: 86400000
+
+# Redis配置
+spring.data.redis.host: 49.232.153.150
+spring.data.redis.port: 6679
+spring.data.redis.password: ruoyi123
+
+# XXL-Job配置
+xxl.job.admin.addresses: http://localhost:8088/xxl-job-admin
+
+# 日志级别
+logging:
+  level:
+    root: INFO
+    com.bagdatahouse: DEBUG
