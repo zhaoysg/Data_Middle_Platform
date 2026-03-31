@@ -14,9 +14,11 @@ import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
 import java.sql.Connection;
+import java.sql.DatabaseMetaData;
 import java.nio.charset.StandardCharsets;
 import java.util.Arrays;
 import java.util.Comparator;
+import java.util.Locale;
 
 /**
  * 元数据核心表自修复初始化器
@@ -52,6 +54,11 @@ public class MetadataSchemaInitializer implements ApplicationRunner {
         Arrays.sort(scripts, Comparator.comparing(Resource::getFilename, Comparator.nullsLast(String::compareTo)));
         DynamicDataSourceContextHolder.push(BIGDATA_DS);
         try (Connection connection = dataSource.getConnection()) {
+            if (!supportsMetadataAutoInit(connection)) {
+                String databaseProductName = resolveDatabaseProductName(connection);
+                log.warn("当前数据库 {} 不支持执行 MySQL 风格元数据初始化脚本，跳过自动初始化", databaseProductName);
+                return;
+            }
             for (Resource script : scripts) {
                 log.info("执行元数据初始化脚本: {}", script.getFilename());
                 ScriptUtils.executeSqlScript(connection, new EncodedResource(script, StandardCharsets.UTF_8));
@@ -59,6 +66,25 @@ public class MetadataSchemaInitializer implements ApplicationRunner {
             log.info("元数据核心表初始化完成");
         } finally {
             DynamicDataSourceContextHolder.clear();
+        }
+    }
+
+    static boolean supportsMetadataAutoInit(Connection connection) {
+        String databaseProductName = resolveDatabaseProductName(connection);
+        if (databaseProductName == null) {
+            return false;
+        }
+        String normalizedName = databaseProductName.toLowerCase(Locale.ROOT);
+        return normalizedName.contains("mysql") || normalizedName.contains("mariadb");
+    }
+
+    static String resolveDatabaseProductName(Connection connection) {
+        try {
+            DatabaseMetaData metaData = connection.getMetaData();
+            return metaData != null ? metaData.getDatabaseProductName() : null;
+        } catch (Exception e) {
+            log.warn("读取数据库类型失败，跳过元数据自动初始化", e);
+            return null;
         }
     }
 }

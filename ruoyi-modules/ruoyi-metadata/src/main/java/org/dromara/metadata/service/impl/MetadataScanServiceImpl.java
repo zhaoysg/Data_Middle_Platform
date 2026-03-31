@@ -175,14 +175,7 @@ public class MetadataScanServiceImpl implements IMetadataScanService {
             LocalDateTime endTime = LocalDateTime.now();
             long elapsedMs = java.time.Duration.between(scanLog.getStartTime(), endTime).toMillis();
 
-            String finalStatus;
-            if (successCount == tablesToScan.size()) {
-                finalStatus = "SUCCESS";
-            } else if (successCount == 0) {
-                finalStatus = "FAILED";
-            } else {
-                finalStatus = "PARTIAL";
-            }
+            String finalStatus = resolveFinalStatus(tablesToScan.size(), successCount, partialCount);
 
             scanLog.setStatus(finalStatus);
             scanLog.setSuccessCount(successCount);
@@ -293,6 +286,19 @@ public class MetadataScanServiceImpl implements IMetadataScanService {
             return currentTenantId.trim();
         }
         return DEFAULT_TENANT_ID;
+    }
+
+    static String resolveFinalStatus(int totalTables, int successCount, int partialCount) {
+        if (totalTables <= 0) {
+            return "FAILED";
+        }
+        if (successCount == totalTables && partialCount == 0) {
+            return "SUCCESS";
+        }
+        if (successCount == 0 && partialCount == 0) {
+            return "FAILED";
+        }
+        return "PARTIAL";
     }
 
     private String resolveTenantId(String entityTenantId, String tenantId) {

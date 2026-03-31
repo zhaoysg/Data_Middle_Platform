@@ -22,4 +22,19 @@ public class MetadataScanServiceImplTest {
     void shouldFallbackToDefaultTenantId() {
         assertEquals(MetadataScanServiceImpl.DEFAULT_TENANT_ID, MetadataScanServiceImpl.resolveTenantId(null, null, null));
     }
+
+    @Test
+    void shouldMarkPartialWhenOnlyPartialTablesSucceeded() {
+        assertEquals("PARTIAL", MetadataScanServiceImpl.resolveFinalStatus(2, 0, 2));
+    }
+
+    @Test
+    void shouldMarkFailedWhenAllTablesFailed() {
+        assertEquals("FAILED", MetadataScanServiceImpl.resolveFinalStatus(2, 0, 0));
+    }
+
+    @Test
+    void shouldMarkSuccessWhenAllTablesSucceededWithoutPartialFailures() {
+        assertEquals("SUCCESS", MetadataScanServiceImpl.resolveFinalStatus(2, 2, 0));
+    }
 }

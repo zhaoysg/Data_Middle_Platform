@@ -64,8 +64,16 @@ const gridOptions: VxeGridProps = {
   pagerConfig: {},
   proxyConfig: {
     ajax: {
-      query: async () => {
-        return await metadataScanLogs({});
+      query: async ({ page }) => {
+        const records = await metadataScanLogs({});
+        const rows = Array.isArray(records) ? records : [];
+        const currentPage = page?.currentPage || 1;
+        const pageSize = page?.pageSize || 10;
+        const start = Math.max((currentPage - 1) * pageSize, 0);
+        return {
+          rows: rows.slice(start, start + pageSize),
+          total: rows.length,
+        };
       },
     },
   },
@@ -79,6 +87,13 @@ const statusMap: Record<string, { color: string; text: string }> = {
   FAILED: { color: 'red', text: '失败' },
   PARTIAL: { color: 'orange', text: '部分成功' },
   CANCELLED: { color: 'default', text: '已取消' },
+};
+const scanTypeMap: Record<string, { color: string; text: string }> = {
+  ALL: { color: 'blue', text: '整库扫描' },
+  TABLES: { color: 'cyan', text: '选表扫描' },
+  RULE: { color: 'purple', text: '规则扫描' },
+  FULL: { color: 'blue', text: '整库扫描' },
+  TABLE_ONLY: { color: 'default', text: '仅表信息' },
 };
 
 const [BasicTable, tableApi] = useVbenVxeGrid({ gridOptions });
@@ -146,8 +161,8 @@ async function handleSubmitScan() {
       </template>
 
       <template #scanType="{ row }">
-        <Tag :color="row.scanType === 'FULL' ? 'blue' : 'default'">
-          {{ row.scanType === 'FULL' ? '全量扫描' : '仅表信息' }}
+        <Tag :color="scanTypeMap[row.scanType!]?.color || 'default'">
+          {{ scanTypeMap[row.scanType!]?.text || row.scanType }}
         </Tag>
       </template>
 

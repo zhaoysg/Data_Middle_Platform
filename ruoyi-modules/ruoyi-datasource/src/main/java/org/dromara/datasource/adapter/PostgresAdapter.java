@@ -8,11 +8,9 @@ import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Timestamp;
-import java.time.LocalDateTime;
-import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 
 /**
  * PostgreSQL 数据源适配器
@@ -229,41 +227,10 @@ public class PostgresAdapter implements DataSourceAdapter {
     }
 
     @Override
-    public java.util.Optional<String> getTableLastUpdateTime(String schemaName, String tableName) {
-        if (tableName == null || tableName.isBlank()) {
-            return java.util.Optional.empty();
-        }
-        String schema = (schemaName != null && !schemaName.isBlank()) ? schemaName.trim() : "public";
-        String sql = """
-            SELECT GREATEST(
-                COALESCE(pg_stat_get_last_analyze_time(c.oid), '1970-01-01'::timestamptz),
-                COALESCE(pg_stat_get_last_autoanalyze_time(c.oid), '1970-01-01'::timestamptz)
-            ) AS ut
-            FROM pg_class c
-            JOIN pg_namespace n ON n.oid = c.relnamespace
-            WHERE n.nspname = ? AND c.relname = ?
-            """;
-        try {
-            List<Map<String, Object>> rows = executeQuery(sql, schema, tableName.trim());
-            if (!rows.isEmpty()) {
-                Object val = rows.get(0).get("ut");
-                if (val != null) {
-                    if (val instanceof Timestamp ts) {
-                        return java.util.Optional.of(ts.toLocalDateTime().toString());
-                    }
-                    if (val instanceof OffsetDateTime odt) {
-                        return java.util.Optional.of(odt.toLocalDateTime().toString());
-                    }
-                    if (val instanceof LocalDateTime ldt) {
-                        return java.util.Optional.of(ldt.toString());
-                    }
-                    return java.util.Optional.of(val.toString());
-                }
-            }
-        } catch (Exception e) {
-            log.debug("获取表最后更新时间失败: {}", tableName, e);
-        }
-        return java.util.Optional.empty();
+    public Optional<String> getTableLastUpdateTime(String schemaName, String tableName) {
+        // PostgreSQL 没有通用且可靠的“表数据最后更新时间”元数据；
+        // analyze/autoanalyze 时间属于统计信息更新时间，不能冒充业务数据更新时间。
+        return Optional.empty();
     }
 
     private static class PostgresColumnInfoRowMapper implements RowMapper<ColumnInfo> {
