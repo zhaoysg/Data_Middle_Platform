@@ -53,6 +53,12 @@
             <artifactId>ruoyi-common-tenant</artifactId>
         </dependency>
 
+        <!-- 加解密模块 -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-common-encrypt</artifactId>
+        </dependency>
+
         <!-- MySQL JDBC（运行时需要） -->
         <dependency>
             <groupId>com.mysql</groupId>
@@ -86,6 +92,25 @@
             <groupId>com.alibaba</groupId>
             <artifactId>druid-spring-boot-3-starter</artifactId>
         </dependency>
+
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
     </dependencies>
+
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-surefire-plugin</artifactId>
+                <configuration>
+                    <skipTests>false</skipTests>
+                    <groups>local</groups>
+                </configuration>
+            </plugin>
+        </plugins>
+    </build>
 
 </project>

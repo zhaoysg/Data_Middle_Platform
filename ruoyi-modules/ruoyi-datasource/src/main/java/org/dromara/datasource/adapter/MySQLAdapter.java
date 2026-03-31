@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
 import java.util.List;
 import java.util.Map;
 
@@ -84,28 +85,35 @@ public class MySQLAdapter implements DataSourceAdapter {
 
     @Override
     public List<ColumnInfo> getColumns(String tableName) {
+        return getColumns(null, tableName);
+    }
+
+    @Override
+    public List<ColumnInfo> getColumns(String schemaName, String tableName) {
+        String schema = resolveSchemaName(schemaName);
         String sql = """
             SELECT
                 COLUMN_NAME as columnName,
                 DATA_TYPE as dataType,
                 COLUMN_COMMENT as columnComment,
-                IS_NULLABLE as nullable,
+                IS_NULLABLE as isNullable,
                 COLUMN_KEY as columnKey
             FROM INFORMATION_SCHEMA.COLUMNS
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+            WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
             ORDER BY ORDINAL_POSITION
             """;
-        return getJdbcTemplate().query(sql, new ColumnInfoRowMapper(), tableName);
+        return getJdbcTemplate().query(sql, new ColumnInfoRowMapper(), schema, tableName);
     }
 
     @Override
     public List<String> getPrimaryKeys(String tableName) {
+        String schema = resolveSchemaName(null);
         String sql = """
             SELECT COLUMN_NAME FROM INFORMATION_SCHEMA.KEY_COLUMN_USAGE
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND CONSTRAINT_NAME = 'PRIMARY'
+            WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ? AND CONSTRAINT_NAME = 'PRIMARY'
             ORDER BY ORDINAL_POSITION
             """;
-        return getJdbcTemplate().queryForList(sql, String.class, tableName);
+        return getJdbcTemplate().queryForList(sql, String.class, schema, tableName);
     }
 
     @Override
@@ -113,12 +121,13 @@ public class MySQLAdapter implements DataSourceAdapter {
         if (tableName == null || tableName.isBlank()) {
             return "";
         }
+        String schema = resolveSchemaName(schemaName);
         String sql = """
             SELECT TABLE_COMMENT FROM INFORMATION_SCHEMA.TABLES
-            WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ?
+            WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
             """;
         try {
-            List<String> rows = getJdbcTemplate().query(sql, (rs, i) -> rs.getString(1), tableName.trim());
+            List<String> rows = getJdbcTemplate().query(sql, (rs, i) -> rs.getString(1), schema, tableName.trim());
             if (rows.isEmpty() || rows.get(0) == null) {
                 return "";
             }
@@ -131,18 +140,44 @@ public class MySQLAdapter implements DataSourceAdapter {
 
     @Override
     public List<String> getTables() {
-        String sql = "SHOW TABLES";
-        return getJdbcTemplate().queryForList(sql).stream()
-            .map(row -> row.values().iterator().next().toString())
-            .collect(java.util.stream.Collectors.toList());
+        return getTables(null);
+    }
+
+    @Override
+    public List<String> getTables(String schemaName) {
+        String schema = resolveSchemaName(schemaName);
+        String sql = """
+            SELECT TABLE_NAME
+            FROM INFORMATION_SCHEMA.TABLES
+            WHERE TABLE_SCHEMA = ? AND TABLE_TYPE = 'BASE TABLE'
+            ORDER BY TABLE_NAME
+            """;
+        return getJdbcTemplate().queryForList(sql, String.class, schema);
     }
 
     @Override
     public long getRowCount(String tableName) {
-        String safeName = quoteIdentifier(tableName);
-        String sql = "SELECT COUNT(*) FROM " + safeName;
+        return getRowCount(null, tableName);
+    }
+
+    @Override
+    public long getRowCount(String schemaName, String tableName) {
+        String schema = resolveSchemaName(schemaName);
+        String qualifiedTable = quoteIdentifier(schema) + "." + quoteIdentifier(tableName);
+        String sql = "SELECT COUNT(*) FROM " + qualifiedTable;
         Long count = getJdbcTemplate().queryForObject(sql, Long.class);
         return count != null ? count : 0L;
+    }
+
+    private String resolveSchemaName(String schemaName) {
+        if (schemaName != null && !schemaName.isBlank()) {
+            return schemaName.trim();
+        }
+        String databaseName = getDatabaseName();
+        if (databaseName == null || databaseName.isBlank()) {
+            throw new IllegalStateException("无法解析当前数据库名");
+        }
+        return databaseName.trim();
     }
 
     @Override
@@ -179,6 +214,37 @@ public class MySQLAdapter implements DataSourceAdapter {
         return null;
     }
 
+    @Override
+    public java.util.Optional<String> getTableLastUpdateTime(String schemaName, String tableName) {
+        if (tableName == null || tableName.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String schema = (schemaName != null && !schemaName.isBlank()) ? schemaName.trim() : getDatabaseName();
+        if (schema == null || schema.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String sql = """
+            SELECT COALESCE(UPDATE_TIME, CREATE_TIME) AS ut
+            FROM information_schema.TABLES
+            WHERE TABLE_SCHEMA = ? AND TABLE_NAME = ?
+            """;
+        try {
+            List<Map<String, Object>> rows = executeQuery(sql, schema, tableName.trim());
+            if (!rows.isEmpty()) {
+                Object val = rows.get(0).get("ut");
+                if (val != null) {
+                    if (val instanceof Timestamp ts) {
+                        return java.util.Optional.of(ts.toLocalDateTime().toString());
+                    }
+                    return java.util.Optional.of(val.toString());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("获取表最后更新时间失败: {}", tableName, e);
+        }
+        return java.util.Optional.empty();
+    }
+
     private static class ColumnInfoRowMapper implements RowMapper<ColumnInfo> {
         @Override
         public ColumnInfo mapRow(ResultSet rs, int rowNum) throws SQLException {
@@ -186,8 +252,8 @@ public class MySQLAdapter implements DataSourceAdapter {
                 rs.getString("columnName"),
                 rs.getString("dataType"),
                 rs.getString("columnComment"),
-                "YES".equals(rs.getString("IS_NULLABLE")),
-                "PRI".equals(rs.getString("COLUMN_KEY"))
+                "YES".equals(rs.getString("isNullable")),
+                "PRI".equals(rs.getString("columnKey"))
             );
         }
     }

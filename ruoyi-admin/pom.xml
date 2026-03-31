@@ -99,6 +99,12 @@
             <artifactId>ruoyi-datasource</artifactId>
         </dependency>
 
+        <!--  元数据管理模块  -->
+        <dependency>
+            <groupId>org.dromara</groupId>
+            <artifactId>ruoyi-metadata</artifactId>
+        </dependency>
+
         <dependency>
             <groupId>de.codecentric</groupId>
             <artifactId>spring-boot-admin-starter-client</artifactId>

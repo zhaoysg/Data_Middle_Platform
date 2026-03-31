@@ -8,6 +8,9 @@ import org.springframework.stereotype.Component;
 
 import java.sql.ResultSet;
 import java.sql.SQLException;
+import java.sql.Timestamp;
+import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Map;
 
@@ -101,6 +104,7 @@ public class PostgresAdapter implements DataSourceAdapter {
 
     @Override
     public List<ColumnInfo> getColumns(String schemaName, String tableName) {
+        String schema = (schemaName != null && !schemaName.isBlank()) ? schemaName.trim() : "public";
         String sql = """
             SELECT
                 a.attname as columnName,
@@ -115,7 +119,7 @@ public class PostgresAdapter implements DataSourceAdapter {
             WHERE n.nspname = ? AND c.relname = ? AND a.attnum > 0
             ORDER BY a.attnum
             """;
-        return getJdbcTemplate().query(sql, new PostgresColumnInfoRowMapper(), schemaName, tableName);
+        return getJdbcTemplate().query(sql, new PostgresColumnInfoRowMapper(), schema, tableName);
     }
 
     @Override
@@ -136,9 +140,15 @@ public class PostgresAdapter implements DataSourceAdapter {
         if (tableName == null || tableName.isBlank()) {
             return "";
         }
-        String sql = "SELECT obj_description(?, 'pg_class')";
+        String schema = (schemaName != null && !schemaName.isBlank()) ? schemaName.trim() : "public";
+        String sql = """
+            SELECT obj_description(c.oid, 'pg_class')
+            FROM pg_class c
+            JOIN pg_namespace n ON c.relnamespace = n.oid
+            WHERE n.nspname = ? AND c.relname = ?
+            """;
         try {
-            List<String> rows = getJdbcTemplate().query(sql, (rs, i) -> rs.getString(1), tableName);
+            List<String> rows = getJdbcTemplate().query(sql, (rs, i) -> rs.getString(1), schema, tableName.trim());
             if (rows.isEmpty() || rows.get(0) == null) {
                 return "";
             }
@@ -161,12 +171,13 @@ public class PostgresAdapter implements DataSourceAdapter {
 
     @Override
     public List<String> getTables(String schemaName) {
+        String schema = (schemaName != null && !schemaName.isBlank()) ? schemaName.trim() : "public";
         String sql = """
             SELECT tablename FROM pg_tables
             WHERE schemaname = ? AND tablename NOT LIKE 'pg_%' AND tablename NOT LIKE 'sql_%'
             ORDER BY tablename
             """;
-        return getJdbcTemplate().queryForList(sql, String.class, schemaName);
+        return getJdbcTemplate().queryForList(sql, String.class, schema);
     }
 
     @Override
@@ -179,6 +190,16 @@ public class PostgresAdapter implements DataSourceAdapter {
     public long getRowCount(String tableName) {
         String safeName = quoteIdentifier(tableName);
         String sql = "SELECT COUNT(*) FROM " + safeName;
+        Long count = getJdbcTemplate().queryForObject(sql, Long.class);
+        return count != null ? count : 0L;
+    }
+
+    @Override
+    public long getRowCount(String schemaName, String tableName) {
+        String schema = (schemaName != null && !schemaName.isBlank()) ? schemaName.trim() : "public";
+        String qSchema = quoteIdentifier(schema);
+        String qTable = quoteIdentifier(tableName);
+        String sql = "SELECT COUNT(*) FROM " + qSchema + "." + qTable;
         Long count = getJdbcTemplate().queryForObject(sql, Long.class);
         return count != null ? count : 0L;
     }
@@ -205,6 +226,44 @@ public class PostgresAdapter implements DataSourceAdapter {
         String qTbl = quoteIdentifier(tableName);
         String sql = "SELECT " + qCol + " FROM " + qTbl + " WHERE " + qCol + " IS NOT NULL LIMIT " + safeLimit;
         return getJdbcTemplate().queryForList(sql);
+    }
+
+    @Override
+    public java.util.Optional<String> getTableLastUpdateTime(String schemaName, String tableName) {
+        if (tableName == null || tableName.isBlank()) {
+            return java.util.Optional.empty();
+        }
+        String schema = (schemaName != null && !schemaName.isBlank()) ? schemaName.trim() : "public";
+        String sql = """
+            SELECT GREATEST(
+                COALESCE(pg_stat_get_last_analyze_time(c.oid), '1970-01-01'::timestamptz),
+                COALESCE(pg_stat_get_last_autoanalyze_time(c.oid), '1970-01-01'::timestamptz)
+            ) AS ut
+            FROM pg_class c
+            JOIN pg_namespace n ON n.oid = c.relnamespace
+            WHERE n.nspname = ? AND c.relname = ?
+            """;
+        try {
+            List<Map<String, Object>> rows = executeQuery(sql, schema, tableName.trim());
+            if (!rows.isEmpty()) {
+                Object val = rows.get(0).get("ut");
+                if (val != null) {
+                    if (val instanceof Timestamp ts) {
+                        return java.util.Optional.of(ts.toLocalDateTime().toString());
+                    }
+                    if (val instanceof OffsetDateTime odt) {
+                        return java.util.Optional.of(odt.toLocalDateTime().toString());
+                    }
+                    if (val instanceof LocalDateTime ldt) {
+                        return java.util.Optional.of(ldt.toString());
+                    }
+                    return java.util.Optional.of(val.toString());
+                }
+            }
+        } catch (Exception e) {
+            log.debug("获取表最后更新时间失败: {}", tableName, e);
+        }
+        return java.util.Optional.empty();
     }
 
     private static class PostgresColumnInfoRowMapper implements RowMapper<ColumnInfo> {

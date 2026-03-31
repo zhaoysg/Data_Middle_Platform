@@ -199,7 +199,7 @@ sms:
 --- # 三方授权
 justauth:
   # 前端外网访问地址
-  address: http://localhost:80
+  address: http://localhost:${FRONTEND_PORT:5666}
   type:
     maxkey:
       # maxkey 服务器地址

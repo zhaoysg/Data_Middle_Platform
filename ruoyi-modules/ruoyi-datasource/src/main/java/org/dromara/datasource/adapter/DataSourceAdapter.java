@@ -150,6 +150,17 @@ public interface DataSourceAdapter {
     }
 
     /**
+     * 获取表最后更新时间（不支持时返回 Optional.empty()）
+     */
+    default java.util.Optional<String> getTableLastUpdateTime(String tableName) {
+        return getTableLastUpdateTime(null, tableName);
+    }
+
+    default java.util.Optional<String> getTableLastUpdateTime(String schemaName, String tableName) {
+        return java.util.Optional.empty();
+    }
+
+    /**
      * 字段信息 record
      *
      * @param columnName    列名
