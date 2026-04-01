@@ -16,7 +16,7 @@ import java.math.BigDecimal;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("dqc_plan")
+@TableName(value = "dqc_plan", excludeProperty = {"createBy", "updateBy", "createDept"})
 public class DqcPlan extends TenantEntity implements Serializable {
 
     @Serial

@@ -17,7 +17,7 @@ import java.time.LocalDateTime;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("dqc_execution")
+@TableName(value = "dqc_execution", excludeProperty = {"createBy", "updateBy", "createDept"})
 public class DqcExecution extends BaseEntity implements Serializable {
 
     @Serial

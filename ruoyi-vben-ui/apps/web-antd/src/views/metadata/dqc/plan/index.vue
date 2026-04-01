@@ -6,7 +6,7 @@ import type { DqcPlan } from '#/api/metadata/model';
 
 import { PlusOutlined, PlayCircleOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { h, Popconfirm, Space, Tag } from 'ant-design-vue';
+import { Popconfirm, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {

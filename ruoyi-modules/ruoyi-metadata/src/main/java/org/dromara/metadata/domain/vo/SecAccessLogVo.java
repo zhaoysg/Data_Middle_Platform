@@ -50,6 +50,5 @@ public class SecAccessLogVo implements Serializable {
     /**
      * 扩展参数（用于时间范围查询等）
      */
-    @ExcelIgnoreUnannotated
     private Map<String, Object> params;
 }

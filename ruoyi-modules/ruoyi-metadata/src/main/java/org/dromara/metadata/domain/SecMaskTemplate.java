@@ -15,7 +15,7 @@ import java.io.Serializable;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("sec_mask_template")
+@TableName(value = "sec_mask_template", excludeProperty = {"createBy", "updateBy", "createDept"})
 public class SecMaskTemplate extends BaseEntity implements Serializable {
 
     @Serial

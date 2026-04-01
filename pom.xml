@@ -383,8 +383,8 @@
     </dependencyManagement>
 
     <modules>
-        <module>ruoyi-admin</module>
         <module>ruoyi-common</module>
+        <module>ruoyi-admin</module>
         <module>ruoyi-extend</module>
         <module>ruoyi-modules</module>
     </modules>
@@ -493,20 +493,45 @@
 
     <repositories>
         <repository>
-            <id>public</id>
+            <id>central</id>
             <name>huawei nexus</name>
             <url>https://mirrors.huaweicloud.com/repository/maven/</url>
             <releases>
                 <enabled>true</enabled>
             </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </repository>
+        <repository>
+            <id>central-public</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
         </repository>
     </repositories>
 
     <pluginRepositories>
         <pluginRepository>
-            <id>public</id>
+            <id>central</id>
             <name>huawei nexus</name>
             <url>https://mirrors.huaweicloud.com/repository/maven/</url>
+            <releases>
+                <enabled>true</enabled>
+            </releases>
+            <snapshots>
+                <enabled>false</enabled>
+            </snapshots>
+        </pluginRepository>
+        <pluginRepository>
+            <id>central-public</id>
+            <name>Maven Central</name>
+            <url>https://repo1.maven.org/maven2/</url>
             <releases>
                 <enabled>true</enabled>
             </releases>

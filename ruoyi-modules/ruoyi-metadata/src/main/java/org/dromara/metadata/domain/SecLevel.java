@@ -15,7 +15,7 @@ import java.io.Serializable;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("sec_level")
+@TableName(value = "sec_level", excludeProperty = {"createBy", "updateBy", "createDept"})
 public class SecLevel extends BaseEntity implements Serializable {
 
     @Serial

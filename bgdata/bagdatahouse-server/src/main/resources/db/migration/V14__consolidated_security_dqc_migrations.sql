@@ -544,13 +544,13 @@ INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_code`, `menu_type`
 -- 识别规则管理
 (81, 7, '识别规则管理', 'SEC_SENSITIVITY_RULES', 'MENU', '/security/sensitivity-rules', 'security/sensitivity-rules/index', 'file-search', 5, 1),
 -- 脱敏规则管理
-(82, 7, '脱敏规则管理', 'SEC_MASK_RULES', 'MENU', '/security/mask-rules', 'security/mask-rules/index', 'shield', 6, 1),
+(82, 7, '脱敏模板', 'SEC_MASK_RULES', 'MENU', '/security/mask-template', 'security/mask-template/index', 'shield', 6, 1),
 -- 脱敏策略管理
-(83, 7, '脱敏策略管理', 'SEC_MASK_STRATEGY', 'MENU', '/security/mask-strategy', 'security/mask-strategy/index', 'setting', 7, 1),
+(83, 7, '脱敏策略', 'SEC_MASK_STRATEGY', 'MENU', '/security/strategy', 'security/strategy/index', 'setting', 7, 1),
 -- 访问审批管理
-(84, 7, '访问审批管理', 'SEC_ACCESS_APPROVAL', 'MENU', '/security/access-approval', 'security/access-approval/index', 'lock', 8, 1),
+(84, 7, '脱敏查询', 'SEC_ACCESS_APPROVAL', 'MENU', '/security/mask-query', 'security/mask-query/index', 'search', 8, 1),
 -- 敏感数据审计（日志）
-(85, 7, '敏感数据审计', 'SEC_AUDIT', 'MENU', '/security/audit', 'security/audit/index', 'audit', 9, 1)
+(85, 7, '脱敏访问日志', 'SEC_AUDIT', 'MENU', '/security/audit', 'security/audit/index', 'audit', 9, 1)
 ON DUPLICATE KEY UPDATE
     `menu_name` = VALUES(`menu_name`),
     `path` = VALUES(`path`),
@@ -561,8 +561,11 @@ ON DUPLICATE KEY UPDATE
 -- 2. 更新已有菜单的路径（向后兼容旧路径）
 UPDATE `sys_menu` SET `path` = '/security/classification', `component` = 'security/classification/index' WHERE `menu_code` = 'SEC_CLASSIFICATION';
 UPDATE `sys_menu` SET `path` = '/security/mask-rules', `component` = 'security/mask-rules/index', `menu_name` = '脱敏规则管理' WHERE `menu_code` = 'SEC_MASK';
-UPDATE `sys_menu` SET `path` = '/security/access-approval', `component` = 'security/access-approval/index', `menu_name` = '访问审批管理' WHERE `menu_code` = 'SEC_ACCESS';
-UPDATE `sys_menu` SET `path` = '/security/audit', `component` = 'security/audit/index', `menu_name` = '敏感数据审计' WHERE `menu_code` = 'SEC_AUDIT';
+UPDATE `sys_menu` SET `path` = '/security/rules', `component` = 'security/rules/index', `menu_name` = '识别规则管理' WHERE `menu_code` = 'SEC_SENSITIVITY_RULES';
+UPDATE `sys_menu` SET `path` = '/security/mask-template', `component` = 'security/mask-template/index', `menu_name` = '脱敏模板' WHERE `menu_code` IN ('SEC_MASK', 'SEC_MASK_RULES');
+UPDATE `sys_menu` SET `path` = '/security/strategy', `component` = 'security/strategy/index', `menu_name` = '脱敏策略' WHERE `menu_code` = 'SEC_MASK_STRATEGY';
+UPDATE `sys_menu` SET `path` = '/security/mask-query', `component` = 'security/mask-query/index', `menu_name` = '脱敏查询' WHERE `menu_code` IN ('SEC_ACCESS', 'SEC_ACCESS_APPROVAL');
+UPDATE `sys_menu` SET `path` = '/security/audit', `component` = 'security/audit/index', `menu_name` = '脱敏访问日志' WHERE `menu_code` = 'SEC_AUDIT';
 
 -- 3. 为 admin 角色分配所有新菜单权限
 INSERT INTO `sys_role_menu` (`role_id`, `menu_id`)

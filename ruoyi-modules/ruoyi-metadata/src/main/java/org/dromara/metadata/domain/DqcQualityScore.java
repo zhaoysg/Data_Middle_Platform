@@ -20,7 +20,7 @@ import java.time.LocalDate;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("dqc_quality_score")
+@TableName(value = "dqc_quality_score", excludeProperty = {"createBy", "updateBy", "createDept"})
 public class DqcQualityScore extends BaseEntity implements Serializable {
 
     @Serial

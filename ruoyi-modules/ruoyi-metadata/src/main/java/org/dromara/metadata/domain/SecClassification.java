@@ -15,7 +15,7 @@ import java.io.Serializable;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("sec_classification")
+@TableName(value = "sec_classification", excludeProperty = {"createBy", "updateBy", "createDept"})
 public class SecClassification extends BaseEntity implements Serializable {
 
     @Serial

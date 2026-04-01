@@ -44,7 +44,6 @@ CREATE TABLE IF NOT EXISTS `dqc_quality_score` (
   KEY `idx_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据质量评分表';
 
-
 -- -------------------------------------------------------
 -- Part 2: V7 Seeds — DQC 21个内置规则模板
 -- -------------------------------------------------------
@@ -182,7 +181,6 @@ INSERT IGNORE INTO `dqc_rule_template` (
  '{"maxValue": 0}',
  '[{"name":"child_table","type":"STRING","required":true},{"name":"child_column","type":"STRING","required":true},{"name":"parent_table","type":"STRING","required":true},{"name":"parent_column","type":"STRING","required":true}]',
  '1', '1', NULL, 'admin', NOW(), 'admin', NOW(), '0');
-
 
 -- -------------------------------------------------------
 -- Part 3: Sec_* 简化版表（Track B，去掉审批流）
@@ -354,7 +352,6 @@ CREATE TABLE IF NOT EXISTS `sec_access_log` (
   KEY `idx_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='脱敏访问日志表';
 
-
 -- -------------------------------------------------------
 -- Part 4: V8 Seeds — 脱敏体系初始化数据
 -- -------------------------------------------------------
@@ -396,7 +393,6 @@ INSERT IGNORE INTO `sec_mask_template` (`template_code`, `template_name`, `templ
 ('MASK_IDCARD', '身份证脱敏', 'MASK', 'CONCAT(LEFT({col}, 6), ''********'', RIGHT({col}, 4))', '身份证号脱敏，保留前6后4', '1', '1', 'admin', NOW(), '0'),
 ('MASK_BANK', '银行卡脱敏', 'MASK', 'CONCAT(LEFT({col}, 4), ''****'', RIGHT({col}, 4))', '银行卡脱敏，保留前4后4', '1', '1', 'admin', NOW(), '0'),
 ('DELETE_COL', '列删除', 'DELETE', 'NULL', '该列直接输出NULL', '1', '1', 'admin', NOW(), '0');
-
 
 -- -------------------------------------------------------
 -- Part 5: Dprofile_* 数据探查表（Track C）
@@ -501,21 +497,37 @@ CREATE TABLE IF NOT EXISTS `dprofile_snapshot` (
   KEY `idx_tenant_id` (`tenant_id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据探查快照表';
 
-
 -- -------------------------------------------------------
 -- Part 6: 索引优化
 -- -------------------------------------------------------
 
 -- FluctuationCheck 查询优化：按 rule_id + status 查询
+SET @table_exists = (
+  SELECT COUNT(*) FROM information_schema.TABLES
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'dqc_execution_detail'
+);
+SET @rule_id_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'dqc_execution_detail'
+    AND COLUMN_NAME = 'rule_id'
+);
+SET @status_exists = (
+  SELECT COUNT(*) FROM information_schema.COLUMNS
+  WHERE TABLE_SCHEMA = DATABASE()
+    AND TABLE_NAME = 'dqc_execution_detail'
+    AND COLUMN_NAME = 'status'
+);
 SET @idx_exists = (
   SELECT COUNT(*) FROM information_schema.STATISTICS
   WHERE TABLE_SCHEMA = DATABASE()
     AND TABLE_NAME = 'dqc_execution_detail'
     AND INDEX_NAME = 'idx_rule_status'
 );
-SET @sql = IF(@idx_exists = 0,
+SET @sql = IF(@table_exists = 1 AND @rule_id_exists = 1 AND @status_exists = 1 AND @idx_exists = 0,
   'CREATE INDEX idx_rule_status ON dqc_execution_detail (rule_id, status)',
-  'SELECT ''idx_rule_status exists'' AS result');
+  'SELECT ''skip idx_rule_status'' AS result');
 PREPARE stmt FROM @sql;
 EXECUTE stmt;
 DEALLOCATE PREPARE stmt;

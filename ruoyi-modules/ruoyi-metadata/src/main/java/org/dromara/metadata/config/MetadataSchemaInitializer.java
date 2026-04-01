@@ -2,39 +2,53 @@ package org.dromara.metadata.config;
 
 import com.baomidou.dynamic.datasource.toolkit.DynamicDataSourceContextHolder;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.beans.factory.annotation.Value;
+import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
 import org.springframework.core.io.Resource;
+import org.springframework.core.io.support.EncodedResource;
 import org.springframework.core.io.support.PathMatchingResourcePatternResolver;
 import org.springframework.core.io.support.ResourcePatternResolver;
-import org.springframework.core.io.support.EncodedResource;
 import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
-import java.nio.charset.StandardCharsets;
+import java.sql.PreparedStatement;
+import java.sql.ResultSet;
+import java.sql.SQLException;
+import java.sql.Statement;
+import java.sql.Timestamp;
+import java.time.Instant;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Locale;
 
 /**
- * 元数据核心表自修复初始化器
+ * Initializes metadata schema objects on the bigdata datasource.
  */
 @Slf4j
 @Component
+@ConditionalOnProperty(prefix = "metadata.schema", name = "auto-init", havingValue = "true")
 public class MetadataSchemaInitializer implements ApplicationRunner {
 
     private static final String BIGDATA_DS = "bigdata";
     private static final String SCRIPT_LOCATION = "classpath*:sql/metadata/*.sql";
+    private static final String HISTORY_TABLE_NAME = "metadata_schema_history";
+    private static final String HISTORY_TABLE_DDL = "CREATE TABLE IF NOT EXISTS `" + HISTORY_TABLE_NAME + "` ("
+        + " `script_name` varchar(255) NOT NULL COMMENT 'script file name',"
+        + " `executed_at` datetime NOT NULL DEFAULT CURRENT_TIMESTAMP COMMENT 'execution time',"
+        + " PRIMARY KEY (`script_name`)"
+        + ") ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='metadata init history'";
+    private static final String HISTORY_EXISTS_SQL =
+        "SELECT COUNT(1) FROM `" + HISTORY_TABLE_NAME + "` WHERE script_name = ?";
+    private static final String HISTORY_INSERT_SQL =
+        "INSERT INTO `" + HISTORY_TABLE_NAME + "` (script_name, executed_at) VALUES (?, ?)";
 
     private final DataSource dataSource;
     private final ResourcePatternResolver resourceResolver = new PathMatchingResourcePatternResolver();
-
-    @Value("${metadata.schema.auto-init:true}")
-    private boolean autoInit;
 
     public MetadataSchemaInitializer(DataSource dataSource) {
         this.dataSource = dataSource;
@@ -42,30 +56,71 @@ public class MetadataSchemaInitializer implements ApplicationRunner {
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        if (!autoInit) {
-            log.info("metadata.schema.auto-init=false，跳过元数据表初始化");
-            return;
-        }
         Resource[] scripts = resourceResolver.getResources(SCRIPT_LOCATION);
         if (scripts.length == 0) {
-            log.warn("未找到元数据初始化脚本: {}", SCRIPT_LOCATION);
+            log.warn("No metadata init scripts found at {}", SCRIPT_LOCATION);
             return;
         }
-        Arrays.sort(scripts, Comparator.comparing(Resource::getFilename, Comparator.nullsLast(String::compareTo)));
+        Arrays.sort(scripts, Comparator.comparing(MetadataSchemaInitializer::resolveScriptName,
+            Comparator.nullsLast(String::compareTo)));
         DynamicDataSourceContextHolder.push(BIGDATA_DS);
         try (Connection connection = dataSource.getConnection()) {
             if (!supportsMetadataAutoInit(connection)) {
                 String databaseProductName = resolveDatabaseProductName(connection);
-                log.warn("当前数据库 {} 不支持执行 MySQL 风格元数据初始化脚本，跳过自动初始化", databaseProductName);
+                log.warn("Database {} does not support MySQL-style metadata init scripts, skip auto init",
+                    databaseProductName);
                 return;
             }
+            ensureHistoryTable(connection);
             for (Resource script : scripts) {
-                log.info("执行元数据初始化脚本: {}", script.getFilename());
+                String scriptName = resolveScriptName(script);
+                if (hasScriptExecuted(connection, scriptName)) {
+                    log.info("Metadata init script already applied, skip: {}", scriptName);
+                    continue;
+                }
+                log.info("Executing metadata init script: {}", scriptName);
                 ScriptUtils.executeSqlScript(connection, new EncodedResource(script, StandardCharsets.UTF_8));
+                markScriptExecuted(connection, scriptName);
             }
-            log.info("元数据核心表初始化完成");
+            log.info("Metadata schema initialization completed");
         } finally {
             DynamicDataSourceContextHolder.clear();
+        }
+    }
+
+    static String resolveScriptName(Resource script) {
+        String filename = script.getFilename();
+        return filename != null ? filename : script.getDescription();
+    }
+
+    static void ensureHistoryTable(Connection connection) throws SQLException {
+        try (Statement statement = connection.createStatement()) {
+            statement.execute(HISTORY_TABLE_DDL);
+        }
+        commitIfNecessary(connection);
+    }
+
+    static boolean hasScriptExecuted(Connection connection, String scriptName) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(HISTORY_EXISTS_SQL)) {
+            statement.setString(1, scriptName);
+            try (ResultSet resultSet = statement.executeQuery()) {
+                return resultSet.next() && resultSet.getInt(1) > 0;
+            }
+        }
+    }
+
+    static void markScriptExecuted(Connection connection, String scriptName) throws SQLException {
+        try (PreparedStatement statement = connection.prepareStatement(HISTORY_INSERT_SQL)) {
+            statement.setString(1, scriptName);
+            statement.setTimestamp(2, Timestamp.from(Instant.now()));
+            statement.executeUpdate();
+        }
+        commitIfNecessary(connection);
+    }
+
+    static void commitIfNecessary(Connection connection) throws SQLException {
+        if (!connection.getAutoCommit()) {
+            connection.commit();
         }
     }
 
@@ -83,7 +138,7 @@ public class MetadataSchemaInitializer implements ApplicationRunner {
             DatabaseMetaData metaData = connection.getMetaData();
             return metaData != null ? metaData.getDatabaseProductName() : null;
         } catch (Exception e) {
-            log.warn("读取数据库类型失败，跳过元数据自动初始化", e);
+            log.warn("Failed to read database product name, skip metadata auto init", e);
             return null;
         }
     }
