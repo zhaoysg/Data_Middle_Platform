@@ -105,4 +105,14 @@ public class DqcPlanController extends BaseController {
     public R<List<DqcPlan>> getPublishedPlans() {
         return R.ok(planService.queryPublishedPlans());
     }
+
+    /**
+     * 执行方案
+     */
+    @SaCheckPermission("metadata:dqc:plan:exec")
+    @Log(title = "数据质量检测方案-执行")
+    @PostMapping("/{id}/execute")
+    public R<Void> execute(@PathVariable Long id) {
+        return toAjax(planService.execute(id));
+    }
 }
