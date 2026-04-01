@@ -37,4 +37,14 @@ public interface IDqcExecutionService {
      * 根据方案ID查询执行记录
      */
     List<DqcExecutionVo> listByPlanId(Long planId);
+
+    /**
+     * 停止正在运行的执行
+     */
+    void stopExecution(Long executionId);
+
+    /**
+     * 重新执行指定执行记录（基于相同方案创建新执行）
+     */
+    DqcExecution rerunExecution(Long executionId, Long triggerUser);
 }

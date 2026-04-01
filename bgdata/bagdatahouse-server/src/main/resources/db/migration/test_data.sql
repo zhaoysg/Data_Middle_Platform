@@ -91,9 +91,10 @@ INSERT INTO `sys_menu` (`id`, `parent_id`, `menu_name`, `menu_code`, `menu_type`
 -- 二级菜单 - 数据安全（parent_id=7）
 (71, 7, '分类分级',   'SEC_CLASSIFICATION', 'MENU', '/security/classification', 'security/classification/index', 'safety-certificate', 1, 1),
 (72, 7, '敏感识别',   'SEC_SENSITIVITY',    'MENU', '/security/sensitivity',    'security/sensitivity/index',    'eye-invisible',     2, 1),
-(73, 7, '脱敏规则',   'SEC_MASK',            'MENU', '/security/mask',           'security/mask/index',           'border',             3, 1),
-(74, 7, '访问审批',   'SEC_ACCESS',          'MENU', '/security/access',         'security/access/index',         'key',                4, 1),
-(75, 7, '审计日志',   'SEC_AUDIT',           'MENU', '/security/audit',          'security/audit/index',          'audit',              5, 1),
+(73, 7, '脱敏模板',   'SEC_MASK',            'MENU', '/security/mask-template',  'security/mask-template/index',  'border',             3, 1),
+(74, 7, '脱敏策略',   'SEC_MASK_STRATEGY',   'MENU', '/security/strategy',       'security/strategy/index',       'setting',            4, 1),
+(75, 7, '脱敏查询',   'SEC_ACCESS',          'MENU', '/security/mask-query',     'security/mask-query/index',     'search',             5, 1),
+(76, 7, '审计日志',   'SEC_AUDIT',           'MENU', '/security/audit',          'security/audit/index',          'audit',              6, 1),
 -- 二级菜单 - 系统管理（parent_id=8）
 (81, 8, '用户管理',   'SYS_USER', 'MENU', '/system/user', 'system/user/index', 'user',   1, 1),
 (82, 8, '角色管理',   'SYS_ROLE', 'MENU', '/system/role', 'system/role/index', 'team',   2, 1),

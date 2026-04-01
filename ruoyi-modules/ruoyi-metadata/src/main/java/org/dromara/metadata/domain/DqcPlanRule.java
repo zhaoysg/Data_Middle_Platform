@@ -15,7 +15,7 @@ import java.io.Serializable;
 @Data
 @NoArgsConstructor
 @EqualsAndHashCode(callSuper = true)
-@TableName("dqc_plan_rule")
+@TableName(value = "dqc_plan_rule", excludeProperty = {"createBy", "updateBy", "createDept"})
 public class DqcPlanRule extends BaseEntity implements Serializable {
 
     @Serial

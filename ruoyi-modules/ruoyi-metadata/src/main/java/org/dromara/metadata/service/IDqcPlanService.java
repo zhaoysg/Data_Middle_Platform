@@ -49,6 +49,11 @@ public interface IDqcPlanService {
     List<DqcPlan> queryPublishedPlans();
 
     /**
+     * 执行方案
+     */
+    int execute(Long planId);
+
+    /**
      * 分页查询方案列表
      */
     TableDataInfo<DqcPlanVo> pagePlanList(DqcPlanBo bo, PageQuery pageQuery);

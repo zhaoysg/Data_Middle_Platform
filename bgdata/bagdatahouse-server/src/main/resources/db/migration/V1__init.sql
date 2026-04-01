@@ -1292,9 +1292,9 @@ UPDATE `sys_menu` SET `path` = '/governance/catalog',   `component` = 'governanc
 -- 数据安全模块：path 使用 /security 前缀
 UPDATE `sys_menu` SET `path` = '/security/classification', `component` = 'security/classification/index' WHERE `menu_code` = 'SEC_CLASSIFICATION';
 UPDATE `sys_menu` SET `path` = '/security/sensitivity',    `component` = 'security/sensitivity/index'    WHERE `menu_code` = 'SEC_SENSITIVITY';
-UPDATE `sys_menu` SET `path` = '/security/mask',          `component` = 'security/mask/index'          WHERE `menu_code` = 'SEC_MASK';
-UPDATE `sys_menu` SET `path` = '/security/access',        `component` = 'security/access/index'        WHERE `menu_code` = 'SEC_ACCESS';
-UPDATE `sys_menu` SET `path` = '/security/audit',        `component` = 'security/audit/index'         WHERE `menu_code` = 'SEC_AUDIT';
+UPDATE `sys_menu` SET `menu_name` = '脱敏模板', `path` = '/security/mask-template', `component` = 'security/mask-template/index' WHERE `menu_code` = 'SEC_MASK';
+UPDATE `sys_menu` SET `menu_name` = '脱敏查询', `path` = '/security/mask-query', `component` = 'security/mask-query/index' WHERE `menu_code` = 'SEC_ACCESS';
+UPDATE `sys_menu` SET `menu_name` = '审计日志', `path` = '/security/audit', `component` = 'security/audit/index' WHERE `menu_code` = 'SEC_AUDIT';
 
 -- 数据探查模块：path 使用 /dprofile 前缀
 UPDATE `sys_menu` SET `path` = '/dprofile/task',   `component` = 'dprofile/task/index'   WHERE `menu_code` = 'PROFILE_TASK';

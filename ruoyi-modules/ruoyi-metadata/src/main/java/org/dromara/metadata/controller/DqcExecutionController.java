@@ -77,4 +77,27 @@ public class DqcExecutionController extends BaseController {
     public R<List<DqcExecutionVo>> listByPlanId(@PathVariable Long planId) {
         return R.ok(executionService.listByPlanId(planId));
     }
+
+    /**
+     * 停止正在运行的执行
+     */
+    @SaCheckPermission("metadata:dqc:execution:stop")
+    @Log(title = "数据质量执行-停止执行")
+    @PutMapping("/{id}/stop")
+    public R<Void> stopExecution(@PathVariable Long id) {
+        executionService.stopExecution(id);
+        return R.ok();
+    }
+
+    /**
+     * 重新执行指定执行记录
+     */
+    @SaCheckPermission("metadata:dqc:execution:rerun")
+    @Log(title = "数据质量执行-重新执行")
+    @PostMapping("/{id}/rerun")
+    public R<DqcExecution> rerunExecution(@PathVariable Long id) {
+        Long userId = LoginHelper.getUserId();
+        DqcExecution execution = executionService.rerunExecution(id, userId);
+        return R.ok(execution);
+    }
 }

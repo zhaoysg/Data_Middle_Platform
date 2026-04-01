@@ -16,6 +16,7 @@ import org.dromara.metadata.domain.bo.DqcPlanBo;
 import org.dromara.metadata.domain.vo.DqcPlanVo;
 import org.dromara.metadata.mapper.DqcPlanMapper;
 import org.dromara.metadata.mapper.DqcPlanRuleMapper;
+import org.dromara.metadata.service.IDqcExecutionService;
 import org.dromara.metadata.service.IDqcPlanService;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -33,6 +34,7 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
 
     private final DqcPlanMapper baseMapper;
     private final DqcPlanRuleMapper planRuleMapper;
+    private final IDqcExecutionService executionService;
 
     @Override
     public TableDataInfo<DqcPlanVo> pagePlanList(DqcPlanBo bo, PageQuery pageQuery) {
@@ -208,5 +210,15 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
                 .eq(DqcPlan::getStatus, "PUBLISHED")
                 .orderByDesc(DqcPlan::getCreateTime)
         );
+    }
+
+    @Override
+    public int execute(Long planId) {
+        DqcPlan plan = baseMapper.selectById(planId);
+        if (plan == null) {
+            throw new IllegalArgumentException("方案不存在: " + planId);
+        }
+        executionService.executePlan(planId, "MANUAL", null);
+        return 1;
     }
 }

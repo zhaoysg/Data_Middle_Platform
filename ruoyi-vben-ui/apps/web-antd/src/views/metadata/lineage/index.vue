@@ -1,16 +1,16 @@
 <script setup lang="ts">
 import { Page } from '@vben/common-ui';
-import { Empty } from 'ant-design-vue';
+import { Empty, Result } from 'ant-design-vue';
 </script>
 
 <template>
   <Page :auto-content-height="true">
     <div class="flex-center h-full">
-      <a-result title="功能开发中" sub-title="数据血缘管理功能正在开发中，敬请期待！">
+      <Result title="鍔熻兘寮€鍙戜腑" sub-title="鏁版嵁琛€缂樼鐞嗗姛鑳芥鍦ㄥ紑鍙戜腑锛屾暚璇锋湡寰咃紒">
         <template #icon>
           <Empty />
         </template>
-      </a-result>
+      </Result>
     </div>
   </Page>
 </template>

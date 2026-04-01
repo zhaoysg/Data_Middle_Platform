@@ -3,11 +3,10 @@ package org.dromara.metadata.domain.bo;
 import io.github.linpeilie.annotations.AutoMapper;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
-import lombok.EqualsAndHashCode;
 import lombok.NoArgsConstructor;
-import org.dromara.common.mybatis.core.domain.BaseEntity;
 import org.dromara.metadata.domain.MetadataScanLog;
 
+import java.io.Serializable;
 import java.util.List;
 
 /**
@@ -15,9 +14,8 @@ import java.util.List;
  */
 @Data
 @NoArgsConstructor
-@EqualsAndHashCode(callSuper = true)
 @AutoMapper(target = MetadataScanLog.class, reverseConvertGenerate = false)
-public class MetadataScanBo extends BaseEntity {
+public class MetadataScanBo implements Serializable {
 
     /**
      * 扫描记录ID
