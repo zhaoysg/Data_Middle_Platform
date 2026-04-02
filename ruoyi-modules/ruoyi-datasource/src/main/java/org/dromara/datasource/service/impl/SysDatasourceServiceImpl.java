@@ -75,12 +75,31 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         return list;
     }
 
+    @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
+    public List<SysDatasourceVo> listDatasourceByIds(List<Long> dsIds) {
+        if (dsIds == null || dsIds.isEmpty()) {
+            return List.of();
+        }
+        List<SysDatasourceVo> list = baseMapper.selectVoList(
+            Wrappers.<SysDatasource>lambdaQuery()
+                .in(SysDatasource::getDsId, dsIds)
+                .orderByAsc(SysDatasource::getDsId)
+        );
+        maskSensitiveFields(list);
+        return list;
+    }
+
     private Wrapper<SysDatasource> buildQueryWrapper(SysDatasourceBo bo) {
         LambdaQueryWrapper<SysDatasource> wrapper = Wrappers.lambdaQuery();
         wrapper.eq(ObjectUtil.isNotNull(bo.getDsId()), SysDatasource::getDsId, bo.getDsId())
             .like(StringUtils.isNotBlank(bo.getDsName()), SysDatasource::getDsName, bo.getDsName())
             .like(StringUtils.isNotBlank(bo.getDsCode()), SysDatasource::getDsCode, bo.getDsCode())
             .eq(StringUtils.isNotBlank(bo.getDsType()), SysDatasource::getDsType, bo.getDsType())
+            .eq(StringUtils.isNotBlank(bo.getDataSource()), SysDatasource::getDataSource, bo.getDataSource())
+            .eq(StringUtils.isNotBlank(bo.getDsFlag()), SysDatasource::getDsFlag, bo.getDsFlag())
             .eq(StringUtils.isNotBlank(bo.getStatus()), SysDatasource::getStatus, bo.getStatus())
             .eq(ObjectUtil.isNotNull(bo.getDeptId()), SysDatasource::getDeptId, bo.getDeptId())
             .orderByAsc(SysDatasource::getDsId);
@@ -317,8 +336,9 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
             ds.getUsername(), ds.getPassword(),
             ds.getConnectionParams()
         );
-        if (StringUtils.isNotBlank(schema)) {
-            return adapter.getTables(schema);
+        String resolvedSchema = resolveSchemaName(ds, schema);
+        if (StringUtils.isNotBlank(resolvedSchema)) {
+            return adapter.getTables(resolvedSchema);
         }
         return adapter.getTables();
     }
@@ -337,8 +357,9 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
             ds.getUsername(), ds.getPassword(),
             ds.getConnectionParams()
         );
-        if (StringUtils.isNotBlank(schema)) {
-            return adapter.getColumns(schema, tableName);
+        String resolvedSchema = resolveSchemaName(ds, schema);
+        if (StringUtils.isNotBlank(resolvedSchema)) {
+            return adapter.getColumns(resolvedSchema, tableName);
         }
         return adapter.getColumns(tableName);
     }
@@ -434,6 +455,14 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
             throw new ServiceException("数据源已停用，请先启用后再操作");
         }
         return datasource;
+    }
+
+    private String resolveSchemaName(SysDatasource ds, String schema) {
+        String resolvedSchema = StringUtils.isNotBlank(schema) ? schema : ds.getSchemaName();
+        if (StringUtils.isBlank(resolvedSchema)) {
+            return null;
+        }
+        return StringUtils.trim(resolvedSchema);
     }
 
     private void maskSensitiveFields(List<SysDatasourceVo> list) {

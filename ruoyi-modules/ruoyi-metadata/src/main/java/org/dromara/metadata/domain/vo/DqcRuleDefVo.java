@@ -56,6 +56,11 @@ public class DqcRuleDefVo implements Serializable {
     private String dimensions;
 
     /**
+     * 兼容前端展示的单值维度
+     */
+    private String dimension;
+
+    /**
      * 规则表达式/SQL
      */
     private String ruleExpr;
@@ -69,6 +74,16 @@ public class DqcRuleDefVo implements Serializable {
      * 目标数据源名称
      */
     private String targetDsName;
+
+    /**
+     * 兼容前端旧字段名
+     */
+    private String dsName;
+
+    /**
+     * 模板名称
+     */
+    private String templateName;
 
     /**
      * 目标表名

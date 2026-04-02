@@ -6,11 +6,10 @@ import type { DqcRuleTemplate } from '#/api/metadata/model';
 
 import { PlusOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { Badge, Popconfirm, Space } from 'ant-design-vue';
+import { Badge, Popconfirm, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  dqcTemplateAdd,
   dqcTemplateList,
   dqcTemplateRemove,
   dqcTemplateUpdate,
@@ -105,6 +104,13 @@ const gridOptions: VxeGridProps = {
       },
     },
     {
+      title: '适用级别',
+      field: 'applyLevel',
+      width: 120,
+      slots: { default: 'applyLevel' },
+    },
+    { title: '模板描述', field: 'templateDesc', minWidth: 260 },
+    {
       title: '内置',
       field: 'builtin',
       width: 80,
@@ -144,6 +150,23 @@ function handleAdd() {
 function handleEdit(record: DqcRuleTemplate) {
   drawerApi.setData({ id: record.id });
   drawerApi.open();
+}
+
+function buildTemplatePayload(record: DqcRuleTemplate) {
+  return {
+    id: record.id,
+    templateCode: record.templateCode,
+    templateName: record.templateName,
+    templateDesc: record.templateDesc,
+    ruleType: record.ruleType,
+    applyLevel: record.applyLevel,
+    defaultExpr: record.defaultExpr,
+    thresholdJson: record.thresholdJson,
+    paramSpec: record.paramSpec,
+    dimension: record.dimension,
+    builtin: record.builtin,
+    enabled: record.enabled,
+  };
 }
 
 async function handleDelete(row: DqcRuleTemplate) {
@@ -188,10 +211,17 @@ async function handleMultiDelete() {
           :text="row.builtin === '1' ? '是' : '否'"
         />
       </template>
+      <template #applyLevel="{ row }">
+        <Tag color="blue">
+          {{ row.applyLevel || '-' }}
+        </Tag>
+      </template>
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => dqcTemplateUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => dqcTemplateUpdate(buildTemplatePayload(row))"
           @reload="tableApi.query()"
         />
       </template>

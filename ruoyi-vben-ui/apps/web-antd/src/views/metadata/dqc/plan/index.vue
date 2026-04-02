@@ -9,30 +9,27 @@ import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Popconfirm, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
-import {
-  dqcPlanAdd,
-  dqcPlanExecute,
-  dqcPlanList,
-  dqcPlanRemove,
-  dqcPlanUpdate,
-} from '#/api/metadata/dqc/plan';
+import { dqcPlanExecute, dqcPlanList, dqcPlanRemove } from '#/api/metadata/dqc/plan';
 
 import planDrawer from './plan-drawer.vue';
 
 const statusColorMap: Record<string, string> = {
   DRAFT: 'default',
-  RUNNING: 'processing',
-  SUCCESS: 'success',
-  FAILED: 'error',
-  STOPPED: 'warning',
+  PUBLISHED: 'success',
+  DISABLED: 'warning',
 };
 
 const statusLabelMap: Record<string, string> = {
   DRAFT: '草稿',
-  RUNNING: '运行中',
-  SUCCESS: '成功',
-  FAILED: '失败',
-  STOPPED: '已停止',
+  PUBLISHED: '已发布',
+  DISABLED: '已停用',
+};
+
+const bindTypeLabelMap: Record<string, string> = {
+  TABLE: '指定表',
+  PATTERN: '表名模式',
+  DOMAIN: '数据域',
+  LAYER: '数仓分层',
 };
 
 const triggerTypeLabelMap: Record<string, string> = {
@@ -49,16 +46,28 @@ const formOptions: VbenFormProps = {
   schema: [
     { fieldName: 'planName', label: '方案名称', component: 'Input' },
     {
+      fieldName: 'bindType',
+      label: '绑定类型',
+      component: 'Select',
+      componentProps: {
+        options: [
+          { label: '指定表', value: 'TABLE' },
+          { label: '表名模式', value: 'PATTERN' },
+          { label: '数据域', value: 'DOMAIN' },
+          { label: '数仓分层', value: 'LAYER' },
+        ],
+        allowClear: true,
+      },
+    },
+    {
       fieldName: 'status',
       label: '状态',
       component: 'Select',
       componentProps: {
         options: [
           { label: '草稿', value: 'DRAFT' },
-          { label: '运行中', value: 'RUNNING' },
-          { label: '成功', value: 'SUCCESS' },
-          { label: '失败', value: 'FAILED' },
-          { label: '已停止', value: 'STOPPED' },
+          { label: '已发布', value: 'PUBLISHED' },
+          { label: '已停用', value: 'DISABLED' },
         ],
         allowClear: true,
       },
@@ -67,13 +76,50 @@ const formOptions: VbenFormProps = {
   wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
 };
 
+function formatBindTarget(row: DqcPlan) {
+  if (row.bindTargetSummary) {
+    return row.bindTargetSummary;
+  }
+  if (!row.bindValue) {
+    return row.layerCode || '-';
+  }
+  try {
+    const parsed = JSON.parse(row.bindValue);
+    if (parsed.tablePattern) {
+      return parsed.tablePattern;
+    }
+    if (parsed.domainCode) {
+      return parsed.domainCode;
+    }
+    if (parsed.layerCode) {
+      return parsed.layerCode;
+    }
+  } catch {
+    return row.bindValue;
+  }
+  return row.bindValue;
+}
+
 const gridOptions: VxeGridProps = {
   checkboxConfig: { highlight: true, reserve: true },
   columns: [
     { type: 'checkbox', width: 50, fixed: 'left' },
-    { title: '方案名称', field: 'planName', width: 200, fixed: 'left' },
-    { title: '方案编码', field: 'planCode', width: 150 },
-    { title: '数据源', field: 'dsName', width: 150 },
+    { title: '方案名称', field: 'planName', minWidth: 180, fixed: 'left' },
+    { title: '方案编码', field: 'planCode', width: 160 },
+    {
+      title: '绑定类型',
+      field: 'bindType',
+      width: 120,
+      formatter: ({ cellValue }: { cellValue?: string }) => {
+        return cellValue ? bindTypeLabelMap[cellValue] || cellValue : '-';
+      },
+    },
+    {
+      title: '绑定目标',
+      field: 'bindTargetSummary',
+      minWidth: 220,
+      formatter: ({ row }: { row: DqcPlan }) => formatBindTarget(row),
+    },
     {
       title: '触发方式',
       field: 'triggerType',
@@ -82,13 +128,11 @@ const gridOptions: VxeGridProps = {
         return cellValue ? triggerTypeLabelMap[cellValue] || cellValue : '-';
       },
     },
-    { title: '规则数', field: 'totalRules', width: 80 },
-    {
-      title: '状态',
-      field: 'status',
-      width: 100,
-      slots: { default: 'status' },
-    },
+    { title: '规则数', field: 'ruleCount', width: 90 },
+    { title: '表数', field: 'tableCount', width: 90 },
+    { title: '最近得分', field: 'lastScoreStr', width: 110 },
+    { title: '最近执行', field: 'lastExecutionTimeStr', width: 180 },
+    { title: '状态', field: 'status', width: 100, slots: { default: 'status' } },
     { title: '创建时间', field: 'createTime', width: 180 },
     { title: '操作', field: 'action', width: 200, fixed: 'right', slots: { default: 'action' } },
   ],
@@ -173,11 +217,7 @@ async function handleMultiDelete() {
       <template #action="{ row }">
         <Space>
           <a-button type="link" size="small" @click="handleEdit(row)">编辑</a-button>
-          <a-button
-            type="link"
-            size="small"
-            @click="handleExecute(row)"
-          >
+          <a-button type="link" size="small" @click="handleExecute(row)">
             <template #icon>
               <PlayCircleOutlined />
             </template>

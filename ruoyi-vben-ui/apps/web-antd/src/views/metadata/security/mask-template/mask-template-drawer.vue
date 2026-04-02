@@ -15,17 +15,9 @@ const emit = defineEmits<{ reload: [] }>();
 const recordId = ref<number>();
 const formValues = ref<Record<string, any>>({});
 
-const templateTypeOptions = [
-  { label: '加密', value: 'ENCRYPT' },
-  { label: '掩码', value: 'MASK' },
-  { label: '隐藏', value: 'HIDE' },
-  { label: '删除', value: 'DELETE' },
-  { label: '打乱', value: 'SHUFFLE' },
-  { label: '自定义', value: 'CUSTOM' },
-];
 const enabledOptions = [
-  { label: '启用', value: '0' },
-  { label: '停用', value: '1' },
+  { label: '启用', value: '1' },
+  { label: '停用', value: '0' },
 ];
 
 const title = computed(() => {
@@ -51,7 +43,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       } else {
         recordId.value = undefined;
         formValues.value = {
-          enabled: '0',
+          enabled: '1',
           builtin: '0',
         };
       }

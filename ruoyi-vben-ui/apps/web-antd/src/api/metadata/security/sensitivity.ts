@@ -31,7 +31,7 @@ export function secColumnSensitivityRemove(ids: IDS) {
 
 /** 扫描敏感字段 */
 export function secColumnSensitivityScan(dsId: ID) {
-  return requestClient.postWithMsg<void>(Api.scan, { dsId });
+  return requestClient.postWithMsg<void>(`${Api.scan}/${dsId}`);
 }
 
 /** 确认敏感字段 */

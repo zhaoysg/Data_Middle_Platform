@@ -97,6 +97,18 @@ public class SysDatasourceVo implements Serializable {
     private String dataLayer;
 
     /**
+     * 数据来源
+     */
+    @ExcelProperty(value = "数据来源")
+    private String dataSource;
+
+    /**
+     * 数据源标识：0-内部 1-外部
+     */
+    @ExcelProperty(value = "数据源标识")
+    private String dsFlag;
+
+    /**
      * 部门ID
      */
     private Long deptId;

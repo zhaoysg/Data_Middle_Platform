@@ -115,4 +115,12 @@ public interface ISysDatasourceService {
      * @return 数据源列表
      */
     List<SysDatasourceVo> listDatasource(SysDatasourceBo bo);
+
+    /**
+     * 按ID集合查询当前用户可访问的数据源列表
+     *
+     * @param dsIds 数据源ID集合
+     * @return 可访问的数据源列表
+     */
+    List<SysDatasourceVo> listDatasourceByIds(List<Long> dsIds);
 }

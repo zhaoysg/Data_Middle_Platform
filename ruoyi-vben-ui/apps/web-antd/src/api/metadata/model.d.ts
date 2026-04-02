@@ -172,7 +172,7 @@ export interface DqcRuleTemplate {
   paramSpec?: string;
   dimension?: string; // COMPLETENESS/UNIQUENESS/ACCURACY/CONSISTENCY/TIMELINESS/VALIDITY/CUSTOM
   builtin?: string; // 1=内置
-  enabled?: string;
+  enabled?: string; // 1=启用 0=停用
   createBy?: string;
   createTime?: string;
   updateBy?: string;
@@ -184,22 +184,35 @@ export interface DqcRuleDef {
   id?: number;
   ruleCode?: string;
   ruleName?: string;
-  ruleDesc?: string;
   templateId?: number;
   templateName?: string;
   ruleType?: string;
+  applyLevel?: string;
   dimension?: string;
+  dimensions?: string;
+  ruleExpr?: string;
   targetDsId?: number;
+  targetDsName?: string;
   dsName?: string;
   targetTable?: string;
   targetColumn?: string;
-  ruleParams?: string; // JSON
+  compareDsId?: number;
+  compareTable?: string;
+  compareColumn?: string;
+  thresholdMin?: number | string;
+  thresholdMax?: number | string;
+  fluctuationThreshold?: number | string;
+  regexPattern?: string;
+  ruleParams?: string; // legacy JSON
   errorLevel?: string; // HIGH/MEDIUM/LOW
-  ruleStrength?: string; // STRONG/WEAK
+  alertReceivers?: string;
+  sortOrder?: number;
   enabled?: string;
   builtin?: string;
   createBy?: string;
   createTime?: string;
+  updateBy?: string;
+  updateTime?: string;
 }
 
 /** DQC质检方案 */
@@ -208,16 +221,25 @@ export interface DqcPlan {
   planCode?: string;
   planName?: string;
   planDesc?: string;
-  dsId?: number;
-  dsName?: string;
+  bindType?: string; // TABLE/PATTERN/LAYER/DOMAIN
+  bindValue?: string;
   layerCode?: string;
-  scanMode?: string; // INCLUDE/EXCLUDE/REGEX
-  tablePattern?: string;
   triggerType?: string; // MANUAL/SCHEDULE/API
-  cronExpr?: string;
-  enabled?: string;
-  status?: string; // DRAFT/RUNNING/SUCCESS/FAILED/STOPPED
-  totalRules?: number;
+  triggerCron?: string;
+  alertOnFailure?: string;
+  autoBlock?: string;
+  status?: string; // DRAFT/PUBLISHED/DISABLED
+  ruleCount?: number;
+  tableCount?: number;
+  lastExecutionId?: number;
+  lastScore?: number | string;
+  lastScoreStr?: string;
+  lastExecutionTime?: string;
+  lastExecutionTimeStr?: string;
+  bindDsId?: number; // UI only
+  bindTablePattern?: string; // UI only
+  bindDomainCode?: string; // UI only
+  bindTargetSummary?: string; // UI only
   createBy?: string;
   createTime?: string;
   updateBy?: string;

@@ -22,8 +22,8 @@ const ruleTypeOptions = [
   { label: '自定义', value: 'CUSTOM' },
 ];
 const enabledOptions = [
-  { label: '启用', value: '0' },
-  { label: '停用', value: '1' },
+  { label: '启用', value: '1' },
+  { label: '停用', value: '0' },
 ];
 
 const title = computed(() => {
@@ -49,7 +49,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       } else {
         recordId.value = undefined;
         formValues.value = {
-          enabled: '0',
+          enabled: '1',
           builtin: '0',
         };
       }

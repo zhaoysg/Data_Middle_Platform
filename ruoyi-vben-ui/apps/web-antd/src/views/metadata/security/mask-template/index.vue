@@ -10,7 +10,6 @@ import { Badge, Popconfirm, Space } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  secMaskTemplateAdd,
   secMaskTemplateList,
   secMaskTemplateRemove,
   secMaskTemplateUpdate,
@@ -102,6 +101,19 @@ const gridOptions: VxeGridProps = {
 const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
 const [MaskTemplateDrawer, drawerApi] = useVbenDrawer({ connectedComponent: maskTemplateDrawer });
 
+function buildTemplatePayload(row: SecMaskTemplate) {
+  return {
+    id: row.id,
+    templateCode: row.templateCode,
+    templateName: row.templateName,
+    templateType: row.templateType,
+    maskExpr: row.maskExpr,
+    templateDesc: row.templateDesc,
+    builtin: row.builtin,
+    enabled: row.enabled,
+  };
+}
+
 function handleAdd() {
   drawerApi.setData({});
   drawerApi.open();
@@ -157,7 +169,9 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => secMaskTemplateUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => secMaskTemplateUpdate(buildTemplatePayload(row))"
           @reload="tableApi.query()"
         />
       </template>

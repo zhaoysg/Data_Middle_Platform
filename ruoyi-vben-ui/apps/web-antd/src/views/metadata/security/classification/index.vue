@@ -10,7 +10,6 @@ import { Popconfirm, Space } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  secClassificationAdd,
   secClassificationList,
   secClassificationRemove,
   secClassificationUpdate,
@@ -65,6 +64,17 @@ const gridOptions: VxeGridProps = {
 const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
 const [ClassificationDrawer, drawerApi] = useVbenDrawer({ connectedComponent: classificationDrawer });
 
+function buildClassificationPayload(row: SecClassification) {
+  return {
+    id: row.id,
+    classCode: row.classCode,
+    className: row.className,
+    classDesc: row.classDesc,
+    sortOrder: row.sortOrder,
+    enabled: row.enabled,
+  };
+}
+
 function handleAdd() {
   drawerApi.setData({});
   drawerApi.open();
@@ -114,7 +124,9 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => secClassificationUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => secClassificationUpdate(buildClassificationPayload(row))"
           @reload="tableApi.query()"
         />
       </template>

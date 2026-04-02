@@ -552,6 +552,8 @@ CREATE TABLE `sys_datasource` (
   `password` varchar(255) DEFAULT NULL COMMENT '密码',
   `connection_params` text COMMENT '额外连接参数JSON',
   `data_layer` varchar(20) DEFAULT NULL COMMENT '数仓层标记：ODS/DWD/DWS/ADS',
+  `data_source` varchar(32) DEFAULT NULL COMMENT '数据来源：K3DC/K3HW/K1/K2/OTHER',
+  `ds_flag` char(1) DEFAULT '0' COMMENT '数据源标识（0内部 1外部）',
   `dept_id` bigint DEFAULT NULL COMMENT '部门ID',
   `status` char(1) DEFAULT '0' COMMENT '状态（0正常 1停用）',
   `del_flag` char(1) DEFAULT '0' COMMENT '删除标志（0代表存在 1代表删除）',

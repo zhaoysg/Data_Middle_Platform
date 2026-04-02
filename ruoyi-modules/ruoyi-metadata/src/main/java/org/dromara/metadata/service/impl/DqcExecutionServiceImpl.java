@@ -1,6 +1,7 @@
 package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -45,6 +46,7 @@ import java.util.concurrent.locks.ReentrantLock;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DqcExecutionServiceImpl implements IDqcExecutionService {
 
     private final DqcExecutionMapper executionMapper;

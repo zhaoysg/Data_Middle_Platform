@@ -3,7 +3,7 @@ import type { Datasource } from '#/api/system/datasource/model';
 
 import { computed, ref, watch } from 'vue';
 
-import { useVbenDrawer } from '@vben/common-ui';
+import { useVbenModal } from '@vben/common-ui';
 import { $t } from '@vben/locales';
 import { cloneDeep } from '@vben/utils';
 
@@ -35,7 +35,9 @@ const [BasicForm, formApi] = useVbenForm({
     formItemClass: 'col-span-1',
   },
   layout: 'vertical',
-  schema: drawerSchema(),
+  schema: drawerSchema({
+    onGenerateCode: handleGenerateCode,
+  }),
   showDefaultActions: false,
   wrapperClass: 'grid-cols-2 gap-x-6 gap-y-2',
 });
@@ -78,6 +80,17 @@ async function customFormValueGetter() {
   return await defaultFormValueGetter(formApi)();
 }
 
+function handleGenerateCode() {
+  const dsType = formApi.form?.values?.dsType as string | undefined;
+  if (!dsType) {
+    message.warning('请先选择数据源类型');
+    return;
+  }
+  const generated = generateDatasourceCode(dsType);
+  lastAutoCode.value = generated;
+  formApi.setFieldValue('dsCode', generated);
+}
+
 function normalizeDatasourcePayload(data: Partial<Datasource>) {
   if (!supportsSchema(data.dsType)) {
     delete data.schemaName;
@@ -99,6 +112,19 @@ function normalizeDatasourcePayload(data: Partial<Datasource>) {
     }
   }
 
+  if (typeof data.dataSource === 'string') {
+    const dataSource = data.dataSource.trim();
+    if (dataSource) {
+      data.dataSource = dataSource;
+    } else {
+      delete data.dataSource;
+    }
+  }
+
+  if (!data.dsFlag) {
+    data.dsFlag = '0';
+  }
+
   return data;
 }
 
@@ -107,7 +133,8 @@ const { onBeforeClose, markInitialized, resetInitialized } = useBeforeCloseDiff(
   currentGetter: customFormValueGetter,
 });
 
-const [BasicDrawer, drawerApi] = useVbenDrawer({
+const [BasicModal, modalApi] = useVbenModal({
+  fullscreenButton: false,
   onBeforeClose,
   onClosed: handleClosed,
   onConfirm: handleConfirm,
@@ -116,19 +143,28 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
     if (!isOpen) {
       return null;
     }
-    drawerApi.drawerLoading(true);
+    modalApi.modalLoading(true);
 
     lastAutoCode.value = null;
-    const { id } = drawerApi.getData() as { id?: number | string };
+    const { id } = modalApi.getData() as { id?: number | string };
     isUpdate.value = !!id;
 
     if (isUpdate.value && id) {
       const record = await datasourceInfo(id);
-      await formApi.setValues(record);
+      await formApi.setValues({
+        dsFlag: '0',
+        status: '0',
+        ...record,
+      });
+    } else {
+      await formApi.setValues({
+        dsFlag: '0',
+        status: '0',
+      });
     }
 
     await markInitialized();
-    drawerApi.drawerLoading(false);
+    modalApi.modalLoading(false);
   },
 });
 
@@ -163,7 +199,7 @@ async function handleConfirm() {
   if (!valid) {
     return;
   }
-  drawerApi.lock(true);
+  modalApi.lock(true);
   try {
     const data = cloneDeep(await formApi.getValues());
     normalizeDatasourcePayload(data);
@@ -174,11 +210,11 @@ async function handleConfirm() {
     }
     emit('reload');
     resetInitialized();
-    drawerApi.close();
+    modalApi.close();
   } catch (error) {
     console.error(error);
   } finally {
-    drawerApi.lock(false);
+    modalApi.lock(false);
   }
 }
 
@@ -190,7 +226,7 @@ async function handleClosed() {
 </script>
 
 <template>
-  <BasicDrawer :title="title" class="w-[920px]">
+  <BasicModal :close-on-click-modal="false" :title="title" class="w-[760px]">
     <BasicForm />
     <template #append-footer>
       <a-button
@@ -200,5 +236,5 @@ async function handleClosed() {
         测试连接
       </a-button>
     </template>
-  </BasicDrawer>
+  </BasicModal>
 </template>

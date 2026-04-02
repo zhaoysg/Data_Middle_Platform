@@ -1,8 +1,8 @@
 <script setup lang="ts">
-import { computed, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenDrawer } from '@vben/common-ui';
-import { Form, Input, InputNumber, Radio, Select, Textarea, message } from 'ant-design-vue';
+import { Form, Input, Radio, Select, Textarea, message } from 'ant-design-vue';
 
 import {
   dqcTemplateAdd,
@@ -38,8 +38,8 @@ const applyLevelOptions = [
   { label: '跨表', value: 'CROSS_TABLE' },
 ];
 const enabledOptions = [
-  { label: '启用', value: '0' },
-  { label: '停用', value: '1' },
+  { label: '启用', value: '1' },
+  { label: '停用', value: '0' },
 ];
 
 const title = computed(() => {
@@ -65,9 +65,8 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       } else {
         recordId.value = undefined;
         formValues.value = {
-          enabled: '0',
+          enabled: '1',
           builtin: '0',
-          sortOrder: 0,
         };
       }
     } finally {
@@ -79,6 +78,8 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
 async function handleSubmit() {
   drawerApi.lock(true);
   try {
+    formatJsonField('thresholdJson');
+    formatJsonField('paramSpec');
     if (recordId.value) {
       await dqcTemplateUpdate({ id: recordId.value, ...formValues.value });
     } else {
@@ -97,6 +98,18 @@ async function handleSubmit() {
 function handleClosed() {
   recordId.value = undefined;
   formValues.value = {};
+}
+
+function formatJsonField(field: 'paramSpec' | 'thresholdJson') {
+  const value = formValues.value[field];
+  if (!value || typeof value !== 'string') {
+    return;
+  }
+  try {
+    formValues.value[field] = JSON.stringify(JSON.parse(value), null, 2);
+  } catch {
+    // Keep the user's original content if it is not valid JSON yet.
+  }
 }
 </script>
 
@@ -145,6 +158,11 @@ function handleClosed() {
         />
       </Form.Item>
       <Form.Item label="阈值JSON" name="thresholdJson">
+        <div class="mb-2 flex justify-end">
+          <a-button size="small" type="link" @click="formatJsonField('thresholdJson')">
+            格式化 JSON
+          </a-button>
+        </div>
         <Textarea
           v-model:value="formValues.thresholdJson"
           placeholder="请输入阈值JSON，如: {&quot;min&quot;: 0, &quot;max&quot;: 100}"
@@ -152,10 +170,15 @@ function handleClosed() {
         />
       </Form.Item>
       <Form.Item label="参数规格" name="paramSpec">
+        <div class="mb-2 flex justify-end">
+          <a-button size="small" type="link" @click="formatJsonField('paramSpec')">
+            格式化 JSON
+          </a-button>
+        </div>
         <Input.TextArea
           v-model:value="formValues.paramSpec"
-          placeholder="请输入参数规格"
-          :rows="2"
+          placeholder="请输入参数规格，例如 [{&quot;name&quot;:&quot;column&quot;,&quot;required&quot;:true}]"
+          :rows="4"
         />
       </Form.Item>
       <Form.Item label="状态" name="enabled">

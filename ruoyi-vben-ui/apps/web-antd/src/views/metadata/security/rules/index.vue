@@ -10,7 +10,6 @@ import { Badge, Popconfirm, Space } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  secSensitivityRuleAdd,
   secSensitivityRuleList,
   secSensitivityRuleRemove,
   secSensitivityRuleUpdate,
@@ -99,6 +98,20 @@ const gridOptions: VxeGridProps = {
 const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
 const [RulesDrawer, drawerApi] = useVbenDrawer({ connectedComponent: rulesDrawer });
 
+function buildRulePayload(row: SecSensitivityRule) {
+  return {
+    id: row.id,
+    ruleCode: row.ruleCode,
+    ruleName: row.ruleName,
+    ruleType: row.ruleType,
+    ruleExpr: row.ruleExpr,
+    targetLevelCode: row.targetLevelCode,
+    targetClassCode: row.targetClassCode,
+    builtin: row.builtin,
+    enabled: row.enabled,
+  };
+}
+
 function handleAdd() {
   drawerApi.setData({});
   drawerApi.open();
@@ -154,7 +167,9 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => secSensitivityRuleUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => secSensitivityRuleUpdate(buildRulePayload(row))"
           @reload="tableApi.query()"
         />
       </template>

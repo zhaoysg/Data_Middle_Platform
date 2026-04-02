@@ -2,6 +2,7 @@ package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import cn.hutool.core.util.StrUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -12,6 +13,8 @@ import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.datasource.adapter.DataSourceAdapter;
+import org.dromara.datasource.domain.vo.SysDatasourceVo;
+import org.dromara.datasource.service.ISysDatasourceService;
 import org.dromara.metadata.domain.DprofileTask;
 import org.dromara.metadata.domain.bo.DprofileTaskBo;
 import org.dromara.metadata.domain.vo.DprofileTaskVo;
@@ -26,6 +29,8 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -36,22 +41,29 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DprofileTaskServiceImpl implements IDprofileTaskService {
 
     private final DprofileTaskMapper taskMapper;
     private final DatasourceHelper datasourceHelper;
     private final IDprofileService dprofileService;
+    private final ISysDatasourceService datasourceService;
 
     @Override
     public TableDataInfo<DprofileTaskVo> queryPageList(DprofileTaskVo vo, PageQuery pageQuery) {
         Wrapper<DprofileTask> wrapper = buildQueryWrapper(vo);
         var page = taskMapper.selectVoPage(pageQuery.build(), wrapper);
+        enrichDatasourceFields(page.getRecords());
         return TableDataInfo.build(page);
     }
 
     @Override
     public DprofileTaskVo queryById(Long id) {
-        return taskMapper.selectVoById(id);
+        DprofileTaskVo vo = taskMapper.selectVoById(id);
+        if (vo != null) {
+            enrichDatasourceFields(List.of(vo));
+        }
+        return vo;
     }
 
     @Override
@@ -183,9 +195,12 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
         try {
             // 1. Get datasource adapter
             DataSourceAdapter adapter = datasourceHelper.getAdapter(task.getDsId());
+            String schemaName = datasourceHelper.getSysDatasource(task.getDsId()).getSchemaName();
 
             // 2. Get tables matching pattern
-            List<String> allTables = adapter.getTables();
+            List<String> allTables = StringUtils.isNotBlank(schemaName)
+                ? adapter.getTables(schemaName)
+                : adapter.getTables();
             List<String> matchedTables = filterTablesByPattern(allTables, task.getTablePattern());
 
             if (matchedTables.isEmpty()) {
@@ -283,5 +298,31 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
             .eq(StringUtils.isNotBlank(vo.getTriggerType()), DprofileTask::getTriggerType, vo.getTriggerType())
             .orderByDesc(DprofileTask::getCreateTime);
         return wrapper;
+    }
+
+    private void enrichDatasourceFields(List<DprofileTaskVo> records) {
+        if (records == null || records.isEmpty()) {
+            return;
+        }
+
+        Set<Long> dsIds = records.stream()
+            .map(DprofileTaskVo::getDsId)
+            .filter(ObjectUtil::isNotNull)
+            .collect(Collectors.toSet());
+        if (dsIds.isEmpty()) {
+            return;
+        }
+
+        Map<Long, SysDatasourceVo> datasourceMap = datasourceService.listDatasourceByIds(List.copyOf(dsIds)).stream()
+            .filter(item -> ObjectUtil.isNotNull(item.getDsId()))
+            .collect(Collectors.toMap(SysDatasourceVo::getDsId, item -> item, (left, right) -> left));
+
+        records.forEach(record -> {
+            SysDatasourceVo datasource = datasourceMap.get(record.getDsId());
+            if (datasource != null) {
+                record.setDsName(datasource.getDsName());
+                record.setDsCode(datasource.getDsCode());
+            }
+        });
     }
 }

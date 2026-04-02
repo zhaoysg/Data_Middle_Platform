@@ -65,9 +65,19 @@ public class DqcRuleDefBo extends BaseEntity implements Serializable {
     private String dimensions;
 
     /**
+     * 兼容旧前端的单值维度字段
+     */
+    private String dimension;
+
+    /**
      * 规则表达式/SQL
      */
     private String ruleExpr;
+
+    /**
+     * 兼容旧前端的规则参数JSON
+     */
+    private String ruleParams;
 
     /**
      * 目标数据源ID
