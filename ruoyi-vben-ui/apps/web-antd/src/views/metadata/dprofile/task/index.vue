@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { h } from 'vue';
+
 import type { VbenFormProps } from '@vben/common-ui';
 
 import type { VxeGridProps } from '#/adapter/vxe-table';
@@ -10,14 +12,11 @@ import { Button, Popconfirm, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  dprofileTaskAdd,
   dprofileTaskList,
   dprofileTaskRemove,
   dprofileTaskStart,
   dprofileTaskStop,
-  dprofileTaskUpdate,
 } from '#/api/metadata/dprofile/task';
-import { TableSwitch } from '#/components/table';
 
 import taskDrawer from './task-drawer.vue';
 
@@ -92,7 +91,6 @@ const gridOptions: VxeGridProps = {
       width: 100,
       slots: { default: 'status' },
     },
-    { title: '状态', field: 'enabled', width: 80, slots: { default: 'enabled' } },
     { title: '操作', field: 'action', width: 180, fixed: 'right', slots: { default: 'action' } },
   ],
   height: 'auto',
@@ -177,13 +175,6 @@ async function handleMultiDelete() {
         <Tag :color="statusColorMap[row.status || '']">
           {{ statusLabelMap[row.status || ''] || row.status || '-' }}
         </Tag>
-      </template>
-      <template #enabled="{ row }">
-        <TableSwitch
-          v-model:value="row.enabled"
-          :api="() => dprofileTaskUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
-          @reload="tableApi.query()"
-        />
       </template>
       <template #action="{ row }">
         <Space>

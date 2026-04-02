@@ -6,7 +6,7 @@ enum Api {
   list = '/system/metadata/dqc/rule/list',
   info = '/system/metadata/dqc/rule',
   root = '/system/metadata/dqc/rule',
-  bindPlan = '/system/metadata/dqc/rule/bind-plan',
+  bindPlan = '/system/metadata/dqc/rule/bind/{planId}',
 }
 
 /** 查询DQC规则定义列表 */
@@ -36,5 +36,8 @@ export function dqcRuleRemove(ids: IDS) {
 
 /** 绑定规则到质检方案 */
 export function dqcRuleBindPlan(planId: ID, ruleIds: ID[]) {
-  return requestClient.postWithMsg<void>(Api.bindPlan, { planId, ruleIds });
+  return requestClient.postWithMsg<void>(
+    Api.bindPlan.replace('{planId}', String(planId)),
+    ruleIds,
+  );
 }

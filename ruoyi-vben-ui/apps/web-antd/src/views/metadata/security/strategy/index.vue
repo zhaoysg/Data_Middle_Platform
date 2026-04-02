@@ -2,7 +2,7 @@
 import type { VbenFormProps } from '@vben/common-ui';
 
 import type { VxeGridProps } from '#/adapter/vxe-table';
-import type { SecMaskStrategy } from '#/api/metadata/model';
+import type { SecMaskStrategy, SecMaskStrategyDetail } from '#/api/metadata/model';
 
 import { PlusOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
@@ -10,7 +10,7 @@ import { Popconfirm, Space } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  secMaskStrategyAdd,
+  secMaskStrategyDetails,
   secMaskStrategyList,
   secMaskStrategyRemove,
   secMaskStrategyUpdate,
@@ -65,6 +65,31 @@ const gridOptions: VxeGridProps = {
 const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
 const [StrategyDrawer, drawerApi] = useVbenDrawer({ connectedComponent: strategyDrawer });
 
+function buildStrategyPayload(row: SecMaskStrategy, details: SecMaskStrategyDetail[]) {
+  return {
+    id: row.id,
+    strategyCode: row.strategyCode,
+    strategyName: row.strategyName,
+    strategyDesc: row.strategyDesc,
+    dsId: row.dsId,
+    enabled: row.enabled,
+    details: details.map((detail) => ({
+      id: detail.id,
+      strategyId: detail.strategyId,
+      dsId: detail.dsId,
+      tableName: detail.tableName,
+      columnName: detail.columnName,
+      templateCode: detail.templateCode,
+      outputAlias: detail.outputAlias,
+    })),
+  };
+}
+
+async function toggleStrategyEnabled(row: SecMaskStrategy) {
+  const details = row.id ? await secMaskStrategyDetails(row.id) : [];
+  await secMaskStrategyUpdate(buildStrategyPayload(row, details || []));
+}
+
 function handleAdd() {
   drawerApi.setData({});
   drawerApi.open();
@@ -114,7 +139,9 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => secMaskStrategyUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => toggleStrategyEnabled(row)"
           @reload="tableApi.query()"
         />
       </template>

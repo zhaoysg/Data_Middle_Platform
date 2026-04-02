@@ -1,12 +1,13 @@
 <script setup lang="ts">
+import { onMounted, ref } from 'vue';
+
 import type { VbenFormProps } from '@vben/common-ui';
 
 import type { VxeGridProps } from '#/adapter/vxe-table';
-import type { SecColumnSensitivity } from '#/api/metadata/model';
 
 import { PlayCircleOutlined } from '@ant-design/icons-vue';
 import { Page } from '@vben/common-ui';
-import { Button, Space, Tag, message } from 'ant-design-vue';
+import { Button, Select, Space, Tag, message } from 'ant-design-vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { datasourceEnabled } from '#/api/system/datasource';
@@ -26,6 +27,10 @@ const confirmedLabelMap: Record<string, string> = {
   '0': '待确认',
   '1': '已确认',
 };
+
+const datasourceOptions = ref<{ label: string; value: number }[]>([]);
+const datasourceLoading = ref(false);
+const selectedDsId = ref<number>();
 
 const formOptions: VbenFormProps = {
   commonConfig: {
@@ -77,6 +82,23 @@ const gridOptions: VxeGridProps = {
 
 const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
 
+async function loadDatasources() {
+  datasourceLoading.value = true;
+  try {
+    const dsList = await datasourceEnabled();
+    datasourceOptions.value = (dsList || []).map((item: any) => ({
+      label: item.dsCode ? `${item.dsName} (${item.dsCode})` : item.dsName,
+      value: item.dsId,
+    }));
+    const [firstDatasource] = datasourceOptions.value;
+    if (!selectedDsId.value && firstDatasource) {
+      selectedDsId.value = firstDatasource.value;
+    }
+  } finally {
+    datasourceLoading.value = false;
+  }
+}
+
 async function handleScan(dsId: number) {
   try {
     await secColumnSensitivityScan(dsId);
@@ -86,6 +108,18 @@ async function handleScan(dsId: number) {
     console.error(error);
   }
 }
+
+function handleScanClick() {
+  if (!selectedDsId.value) {
+    message.warning('请先选择需要扫描的数据源');
+    return;
+  }
+  void handleScan(selectedDsId.value);
+}
+
+onMounted(() => {
+  void loadDatasources();
+});
 </script>
 
 <template>
@@ -93,7 +127,18 @@ async function handleScan(dsId: number) {
     <BasicTable table-title="字段敏感记录">
       <template #toolbar-tools>
         <Space>
-          <Button type="primary" :icon="h(PlayCircleOutlined)" @click="handleScan(1)">
+          <Select
+            v-model:value="selectedDsId"
+            :options="datasourceOptions"
+            :loading="datasourceLoading"
+            :disabled="!datasourceOptions.length"
+            placeholder="请选择扫描数据源"
+            style="width: 240px"
+          />
+          <Button type="primary" @click="handleScanClick">
+            <template #icon>
+              <PlayCircleOutlined />
+            </template>
             扫描敏感字段
           </Button>
         </Space>

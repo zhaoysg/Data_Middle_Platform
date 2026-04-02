@@ -172,6 +172,11 @@ datasource:
     # AES 秘钥长度要求为 16/24/32 位，建议通过环境变量配置
     key: ${DATASOURCE_ENCRYPT_KEY:}
 
+# 元数据 schema 自动初始化默认关闭，正式环境依赖发布迁移脚本
+metadata:
+  schema:
+    auto-init: false
+
 # api接口加密
 api-decrypt:
   # 是否开启全局接口加密

@@ -2,6 +2,7 @@ package org.dromara.metadata.domain.bo;
 
 import io.github.linpeilie.annotations.AutoMapper;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -42,7 +43,7 @@ public class DprofileTaskBo implements Serializable {
     /**
      * 关联数据源ID
      */
-    @NotBlank(message = "数据源ID不能为空")
+    @NotNull(message = "数据源ID不能为空")
     private Long dsId;
 
     /**

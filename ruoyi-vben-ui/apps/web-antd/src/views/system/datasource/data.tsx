@@ -1,11 +1,15 @@
 import type { FormSchemaGetter } from '#/adapter/form';
 import type { VxeGridProps } from '#/adapter/vxe-table';
 
+import { markRaw } from 'vue';
+
 import { DictEnum } from '@vben/constants';
 
-import { Tag } from 'ant-design-vue';
+import { Button, Tag } from 'ant-design-vue';
 
 import { getDictOptions } from '#/utils/dict';
+
+import ConnectionParamsEditor from './connection-params-editor.vue';
 
 /** 数据源类型选项 */
 export const datasourceTypeOptions = [
@@ -27,6 +31,21 @@ export const dataLayerOptions = [
   { label: 'DWD（明细层）', value: 'DWD' },
   { label: 'DWS（汇总层）', value: 'DWS' },
   { label: 'ADS（应用层）', value: 'ADS' },
+];
+
+/** 数据来源选项 */
+export const dataSourceOptions = [
+  { label: 'K3DC', value: 'K3DC' },
+  { label: 'K3HW', value: 'K3HW' },
+  { label: 'K1', value: 'K1' },
+  { label: 'K2', value: 'K2' },
+  { label: 'OTHER', value: 'OTHER' },
+];
+
+/** 数据源标识选项 */
+export const datasourceFlagOptions = [
+  { label: '内部', value: '0', color: 'green' },
+  { label: '外部', value: '1', color: 'orange' },
 ];
 
 /** 查询表单 */
@@ -65,6 +84,22 @@ export const querySchema: FormSchemaGetter = () => [
     fieldName: 'dataLayer',
     label: '数仓层',
   },
+  {
+    component: 'Select',
+    componentProps: {
+      options: dataSourceOptions,
+    },
+    fieldName: 'dataSource',
+    label: '数据来源',
+  },
+  {
+    component: 'Select',
+    componentProps: {
+      options: datasourceFlagOptions.map(({ label, value }) => ({ label, value })),
+    },
+    fieldName: 'dsFlag',
+    label: '数据源标识',
+  },
 ];
 
 /** 表格列定义 */
@@ -96,6 +131,33 @@ export const columns: VxeGridProps['columns'] = [
           return <Tag color={found.color}>{found.label}</Tag>;
         }
         return <Tag>{row.dsType}</Tag>;
+      },
+    },
+  },
+  {
+    title: '数据来源',
+    field: 'dataSource',
+    width: 120,
+    slots: {
+      default: ({ row }) => {
+        if (row.dataSource) {
+          return <Tag color="geekblue">{row.dataSource}</Tag>;
+        }
+        return <span>-</span>;
+      },
+    },
+  },
+  {
+    title: '数据源标识',
+    field: 'dsFlag',
+    width: 110,
+    slots: {
+      default: ({ row }) => {
+        const found = datasourceFlagOptions.find((item) => item.value === row.dsFlag);
+        if (found) {
+          return <Tag color={found.color}>{found.label}</Tag>;
+        }
+        return <span>-</span>;
       },
     },
   },
@@ -147,8 +209,17 @@ export const columns: VxeGridProps['columns'] = [
   },
 ];
 
-/** 表单抽屉 schema */
-export const drawerSchema: FormSchemaGetter = () => [
+interface DrawerSchemaOptions {
+  onGenerateCode?: () => void;
+}
+
+/** 表单弹窗 schema */
+export function drawerSchema(
+  options: DrawerSchemaOptions = {},
+): ReturnType<FormSchemaGetter> {
+  const { onGenerateCode } = options;
+
+  return [
   {
     component: 'Input',
     dependencies: {
@@ -181,6 +252,13 @@ export const drawerSchema: FormSchemaGetter = () => [
     fieldName: 'dsCode',
     help: '留空时按类型自动生成全局唯一编码',
     label: '数据源编码',
+    renderComponentContent: () => ({
+      addonAfter: () => (
+        <Button size="small" type="link" onClick={() => onGenerateCode?.()}>
+          自动生成
+        </Button>
+      ),
+    }),
     rules: 'required',
   },
   {
@@ -199,6 +277,26 @@ export const drawerSchema: FormSchemaGetter = () => [
     },
     fieldName: 'dataLayer',
     label: '数仓层',
+  },
+  {
+    component: 'Select',
+    componentProps: {
+      options: dataSourceOptions,
+      showSearch: true,
+    },
+    fieldName: 'dataSource',
+    label: '数据来源',
+  },
+  {
+    component: 'RadioGroup',
+    componentProps: {
+      buttonStyle: 'solid',
+      options: datasourceFlagOptions.map(({ label, value }) => ({ label, value })),
+      optionType: 'button',
+    },
+    defaultValue: '0',
+    fieldName: 'dsFlag',
+    label: '数据源标识',
   },
   {
     component: 'Select',
@@ -278,16 +376,11 @@ export const drawerSchema: FormSchemaGetter = () => [
     }),
   },
   {
-    component: 'Textarea',
-    componentProps: {
-      autoSize: { minRows: 3, maxRows: 6 },
-      placeholder:
-        '支持按行 key=value，或 useSSL=false&serverTimezone=UTC，也可输入 JSON：{"connectTimeout":5000}',
-    },
+    component: markRaw(ConnectionParamsEditor),
     fieldName: 'connectionParams',
-    label: '连接参数',
-    help: '支持 JSON / 按行 / querystring 三种格式',
-    formItemClass: 'col-span-2',
+    help: '支持按行 key=value、querystring 或 JSON，保存时统一转为 key=value 多行格式',
+    label: '高级参数',
+    formItemClass: 'col-span-2 items-start',
   },
   {
     component: 'Textarea',
@@ -295,4 +388,5 @@ export const drawerSchema: FormSchemaGetter = () => [
     label: '备注',
     formItemClass: 'col-span-2',
   },
-];
+  ];
+}

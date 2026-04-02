@@ -10,7 +10,6 @@ import { Popconfirm, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  dqcRuleAdd,
   dqcRuleList,
   dqcRuleRemove,
   dqcRuleUpdate,
@@ -49,7 +48,7 @@ const formOptions: VbenFormProps = {
   schema: [
     { fieldName: 'ruleName', label: '规则名称', component: 'Input' },
     {
-      fieldName: 'dimension',
+      fieldName: 'dimensions',
       label: '质量维度',
       component: 'Select',
       componentProps: {
@@ -71,8 +70,8 @@ const formOptions: VbenFormProps = {
       component: 'Select',
       componentProps: {
         options: [
-          { label: '正常', value: '0' },
-          { label: '停用', value: '1' },
+          { label: '启用', value: '1' },
+          { label: '停用', value: '0' },
         ],
         allowClear: true,
       },
@@ -87,7 +86,7 @@ const gridOptions: VxeGridProps = {
     { type: 'checkbox', width: 50, fixed: 'left' },
     { title: '规则名称', field: 'ruleName', width: 180, fixed: 'left' },
     { title: '规则编码', field: 'ruleCode', width: 150 },
-    { title: '模板名称', field: 'templateName', width: 120 },
+    { title: '模板名称', field: 'templateName', width: 140 },
     {
       title: '质量维度',
       field: 'dimension',
@@ -96,7 +95,9 @@ const gridOptions: VxeGridProps = {
         return cellValue ? dimensionLabelMap[cellValue] || cellValue : '-';
       },
     },
-    { title: '数据源', field: 'dsName', width: 120 },
+    { title: '规则类型', field: 'ruleType', width: 120 },
+    { title: '适用级别', field: 'applyLevel', width: 120 },
+    { title: '数据源', field: 'targetDsName', width: 150 },
     { title: '目标表', field: 'targetTable', width: 150 },
     { title: '目标字段', field: 'targetColumn', width: 120 },
     {
@@ -139,6 +140,33 @@ function handleAdd() {
 function handleEdit(record: DqcRuleDef) {
   drawerApi.setData({ id: record.id });
   drawerApi.open();
+}
+
+function buildRulePayload(record: DqcRuleDef) {
+  return {
+    id: record.id,
+    ruleName: record.ruleName,
+    ruleCode: record.ruleCode,
+    templateId: record.templateId,
+    ruleType: record.ruleType,
+    applyLevel: record.applyLevel,
+    dimensions: record.dimensions || record.dimension,
+    ruleExpr: record.ruleExpr,
+    targetDsId: record.targetDsId,
+    targetTable: record.targetTable,
+    targetColumn: record.targetColumn,
+    compareDsId: record.compareDsId,
+    compareTable: record.compareTable,
+    compareColumn: record.compareColumn,
+    thresholdMin: record.thresholdMin,
+    thresholdMax: record.thresholdMax,
+    fluctuationThreshold: record.fluctuationThreshold,
+    regexPattern: record.regexPattern,
+    errorLevel: record.errorLevel,
+    alertReceivers: record.alertReceivers,
+    sortOrder: record.sortOrder,
+    enabled: record.enabled,
+  };
 }
 
 async function handleDelete(row: DqcRuleDef) {
@@ -185,7 +213,9 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => dqcRuleUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => dqcRuleUpdate(buildRulePayload(row))"
           @reload="tableApi.query()"
         />
       </template>

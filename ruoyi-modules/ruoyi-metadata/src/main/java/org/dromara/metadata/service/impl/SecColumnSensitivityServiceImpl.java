@@ -2,6 +2,7 @@ package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
@@ -32,6 +33,7 @@ import java.util.regex.Pattern;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivityService {
 
     private final SecColumnSensitivityMapper baseMapper;
@@ -65,7 +67,10 @@ public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivitySer
         }
 
         DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
-        List<String> tables = adapter.getTables();
+        String schemaName = datasourceHelper.getSysDatasource(dsId).getSchemaName();
+        List<String> tables = StringUtils.isNotBlank(schemaName)
+            ? adapter.getTables(schemaName)
+            : adapter.getTables();
 
         List<SecSensitivityRuleVo> rules = sensitivityRuleService.listAllEnabled();
         if (CollUtil.isEmpty(rules)) {
@@ -77,7 +82,9 @@ public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivitySer
 
         for (String tableName : tables) {
             try {
-                List<ColumnInfo> columns = adapter.getColumns(tableName);
+                List<ColumnInfo> columns = StringUtils.isNotBlank(schemaName)
+                    ? adapter.getColumns(schemaName, tableName)
+                    : adapter.getColumns(tableName);
                 for (ColumnInfo col : columns) {
                     String colName = col.columnName().toLowerCase();
                     String dataType = col.dataType();

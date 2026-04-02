@@ -2,6 +2,7 @@ package org.dromara.metadata.service;
 
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
+import org.dromara.metadata.domain.bo.DqcRuleTemplateBo;
 import org.dromara.metadata.domain.vo.DqcRuleTemplateVo;
 
 import java.util.List;
@@ -22,6 +23,21 @@ public interface IDqcRuleTemplateService {
     DqcRuleTemplateVo queryById(Long id);
 
     /**
+     * 新增模板 - RuoYi标准方法名
+     */
+    Long insertByBo(DqcRuleTemplateBo bo);
+
+    /**
+     * 修改模板 - RuoYi标准方法名
+     */
+    int updateByBo(DqcRuleTemplateBo bo);
+
+    /**
+     * 删除模板 - RuoYi标准方法名
+     */
+    int deleteByIds(List<Long> ids);
+
+    /**
      * 查询所有模板列表
      */
     List<DqcRuleTemplateVo> listAll();
@@ -40,4 +56,19 @@ public interface IDqcRuleTemplateService {
      * 获取模板详情
      */
     DqcRuleTemplateVo getTemplateById(Long id);
+
+    /**
+     * 新增模板
+     */
+    Long insertTemplate(DqcRuleTemplateBo bo);
+
+    /**
+     * 修改模板
+     */
+    int updateTemplate(DqcRuleTemplateBo bo);
+
+    /**
+     * 删除模板
+     */
+    int deleteTemplate(List<Long> ids);
 }

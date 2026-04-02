@@ -14,8 +14,8 @@ const formValues = ref<Record<string, any>>({});
 const datasourceOptions = ref<{ label: string; value: number }[]>([]);
 
 const enabledOptions = [
-  { label: '启用', value: '0' },
-  { label: '停用', value: '1' },
+  { label: '启用', value: '1' },
+  { label: '停用', value: '0' },
 ];
 
 const title = computed(() => {
@@ -35,7 +35,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
     try {
       const dsList = await datasourceEnabled();
       datasourceOptions.value = (dsList || []).map((item: any) => ({
-        label: item.dsName,
+        label: item.dsCode ? `${item.dsName} (${item.dsCode})` : item.dsName,
         value: item.dsId,
       }));
 
@@ -47,7 +47,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       } else {
         recordId.value = undefined;
         formValues.value = {
-          enabled: '0',
+          enabled: '1',
         };
       }
     } finally {
@@ -100,7 +100,15 @@ function handleClosed() {
         <Select
           v-model:value="formValues.dsId"
           :options="datasourceOptions"
+          :filter-option="
+            (input, option) =>
+              String(option?.label ?? '')
+                .toLowerCase()
+                .includes(input.toLowerCase())
+          "
           placeholder="请选择数据源"
+          option-filter-prop="label"
+          show-search
         />
       </Form.Item>
       <Form.Item label="状态" name="enabled">

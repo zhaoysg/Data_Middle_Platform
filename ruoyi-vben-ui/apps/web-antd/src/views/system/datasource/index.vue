@@ -4,7 +4,7 @@ import type { VbenFormProps } from '@vben/common-ui';
 import type { VxeGridProps } from '#/adapter/vxe-table';
 import type { Datasource } from '#/api/system/datasource/model';
 
-import { Page, useVbenDrawer } from '@vben/common-ui';
+import { Page, useVbenModal } from '@vben/common-ui';
 import { getVxePopupContainer } from '@vben/utils';
 
 import { Modal, Popconfirm, Space, message } from 'ant-design-vue';
@@ -65,18 +65,18 @@ const [BasicTable, tableApi] = useVbenVxeGrid({
   gridOptions,
 });
 
-const [DatasourceDrawer, drawerApi] = useVbenDrawer({
+const [DatasourceModal, modalApi] = useVbenModal({
   connectedComponent: datasourceDrawer,
 });
 
 function handleAdd() {
-  drawerApi.setData({});
-  drawerApi.open();
+  modalApi.setData({});
+  modalApi.open();
 }
 
 async function handleEdit(record: Datasource) {
-  drawerApi.setData({ id: record.dsId });
-  drawerApi.open();
+  modalApi.setData({ id: record.dsId });
+  modalApi.open();
 }
 
 async function handleDelete(row: Datasource) {
@@ -201,6 +201,6 @@ async function handleRowTest(row: Datasource) {
         </Space>
       </template>
     </BasicTable>
-    <DatasourceDrawer @reload="tableApi.query()" />
+    <DatasourceModal @reload="tableApi.query()" />
   </Page>
 </template>

@@ -23,6 +23,10 @@ export interface Datasource {
   connectionParams?: string;
   /** 数仓层标记 */
   dataLayer?: string;
+  /** 数据来源 */
+  dataSource?: string;
+  /** 数据源标识：0-内部 1-外部 */
+  dsFlag?: string;
   /** 部门ID */
   deptId?: number;
   /** 部门名称 */

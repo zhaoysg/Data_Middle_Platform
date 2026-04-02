@@ -87,6 +87,18 @@ public class SysDatasourceBo extends BaseEntity {
     private String dataLayer;
 
     /**
+     * 数据来源：K3DC / K3HW / K1 / K2 / OTHER
+     */
+    @Size(max = 32, message = "数据来源长度不能超过{max}个字符")
+    private String dataSource;
+
+    /**
+     * 数据源标识：0-内部 1-外部
+     */
+    @Size(max = 1, message = "数据源标识长度不能超过{max}个字符")
+    private String dsFlag;
+
+    /**
      * 部门ID
      */
     private Long deptId;

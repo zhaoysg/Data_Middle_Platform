@@ -1,9 +1,11 @@
 package org.dromara.metadata.service.impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.datasource.adapter.DataSourceAdapter;
 import org.dromara.datasource.adapter.DataSourceAdapter.ColumnInfo;
 import org.dromara.metadata.domain.DprofileColumnReport;
@@ -30,6 +32,7 @@ import java.util.*;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DprofileServiceImpl implements IDprofileService {
 
     private final DatasourceHelper datasourceHelper;
@@ -54,8 +57,6 @@ public class DprofileServiceImpl implements IDprofileService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long analyzeTable(Long dsId, String tableName, String level) {
-        DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
-
         // 1. Table-level stats
         TableStats tableStats = getTableStats(dsId, tableName);
 
@@ -137,9 +138,14 @@ public class DprofileServiceImpl implements IDprofileService {
     @Override
     public TableStats getTableStats(Long dsId, String tableName) {
         DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
+        String schemaName = resolveSchemaName(dsId);
 
-        long rowCount = adapter.getRowCount(tableName);
-        List<ColumnInfo> columns = adapter.getColumns(tableName);
+        long rowCount = StringUtils.isNotBlank(schemaName)
+            ? adapter.getRowCount(schemaName, tableName)
+            : adapter.getRowCount(tableName);
+        List<ColumnInfo> columns = StringUtils.isNotBlank(schemaName)
+            ? adapter.getColumns(schemaName, tableName)
+            : adapter.getColumns(tableName);
 
         // HARD-LIMIT: only analyze first MAX_COLUMNS columns
         if (columns.size() > MAX_COLUMNS) {
@@ -148,8 +154,12 @@ public class DprofileServiceImpl implements IDprofileService {
             columns = columns.subList(0, MAX_COLUMNS);
         }
 
-        String tableComment = adapter.getTableComment(tableName);
-        Optional<String> lastModified = adapter.getTableLastUpdateTime(tableName);
+        String tableComment = StringUtils.isNotBlank(schemaName)
+            ? adapter.getTableComment(schemaName, tableName)
+            : adapter.getTableComment(tableName);
+        Optional<String> lastModified = StringUtils.isNotBlank(schemaName)
+            ? adapter.getTableLastUpdateTime(schemaName, tableName)
+            : adapter.getTableLastUpdateTime(tableName);
 
         return new TableStats(
             tableName,
@@ -164,7 +174,10 @@ public class DprofileServiceImpl implements IDprofileService {
     @Override
     public List<ColumnStats> getColumnStats(Long dsId, String tableName) {
         DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
-        List<ColumnInfo> columns = adapter.getColumns(tableName);
+        String schemaName = resolveSchemaName(dsId);
+        List<ColumnInfo> columns = StringUtils.isNotBlank(schemaName)
+            ? adapter.getColumns(schemaName, tableName)
+            : adapter.getColumns(tableName);
 
         // HARD-LIMIT: only analyze first MAX_COLUMNS columns
         if (columns.size() > MAX_COLUMNS) {
@@ -176,7 +189,7 @@ public class DprofileServiceImpl implements IDprofileService {
         List<ColumnStats> result = new ArrayList<>();
         for (ColumnInfo col : columns) {
             try {
-                ColumnStats stats = analyzeColumn(jdbc, tableName, col);
+                ColumnStats stats = analyzeColumn(jdbc, adapter, schemaName, tableName, col);
                 result.add(stats);
             } catch (Exception e) {
                 log.warn("分析列 {}.{} 失败: {}", tableName, col.columnName(), e.getMessage());
@@ -186,14 +199,14 @@ public class DprofileServiceImpl implements IDprofileService {
         return result;
     }
 
-    private ColumnStats analyzeColumn(JdbcTemplate jdbc, String tableName, ColumnInfo col) {
+    private ColumnStats analyzeColumn(JdbcTemplate jdbc, DataSourceAdapter adapter, String schemaName, String tableName, ColumnInfo col) {
         String colName = col.columnName();
-        String quotedName = quoteIdentifier(colName);
-        String quotedTable = quoteIdentifier(tableName);
+        String quotedName = adapter.quoteIdentifier(colName);
+        String quotedTable = qualifyTableName(adapter, schemaName, tableName);
 
         // COUNT(*) total
         long totalCount = jdbc.queryForObject(
-            "SELECT COUNT(*) FROM " + quotedTable + " LIMIT 1", Long.class);
+            "SELECT COUNT(*) FROM " + quotedTable, Long.class);
         if (totalCount == 0) {
             return createEmptyStats(col);
         }
@@ -257,11 +270,15 @@ public class DprofileServiceImpl implements IDprofileService {
         );
     }
 
-    /**
-     * 引用标识符（适配不同数据库）
-     */
-    private String quoteIdentifier(String name) {
-        // 默认使用反引号，可根据数据源类型适配
-        return "`" + name.replace("`", "``") + "`";
+    private String resolveSchemaName(Long dsId) {
+        return datasourceHelper.getSysDatasource(dsId).getSchemaName();
+    }
+
+    private String qualifyTableName(DataSourceAdapter adapter, String schemaName, String tableName) {
+        String quotedTable = adapter.quoteIdentifier(tableName);
+        if (StringUtils.isBlank(schemaName)) {
+            return quotedTable;
+        }
+        return adapter.quoteIdentifier(schemaName) + "." + quotedTable;
     }
 }

@@ -3,6 +3,7 @@ package org.dromara.metadata.service.impl;
 import cn.hutool.core.util.ObjectUtil;
 import com.alibaba.fastjson2.JSON;
 import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -37,6 +38,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DprofileSnapshotServiceImpl implements IDprofileSnapshotService {
 
     private final DprofileSnapshotMapper snapshotMapper;
@@ -63,18 +65,21 @@ public class DprofileSnapshotServiceImpl implements IDprofileSnapshotService {
         log.info("开始创建快照: dsId={}, name={}", dsId, name);
 
         DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
-        List<String> tables = adapter.getTables();
+        String schemaName = datasourceHelper.getSysDatasource(dsId).getSchemaName();
+        List<String> tables = StringUtils.isNotBlank(schemaName)
+            ? adapter.getTables(schemaName)
+            : adapter.getTables();
 
         Map<String, SnapshotCompareVo.TableSnapshotData> snapshotDataMap = new LinkedHashMap<>();
         int processedCount = 0;
 
         for (String tableName : tables) {
             try {
-                TableStats stats = getTableStatsFromAdapter(adapter, tableName);
+                TableStats stats = getTableStatsFromAdapter(adapter, schemaName, tableName);
                 Map<String, SnapshotCompareVo.ColumnSnapshotData> columnsMap = new LinkedHashMap<>();
 
                 // Get column stats
-                List<ColumnStats> columnStats = getColumnStatsFromAdapter(adapter, tableName);
+                List<ColumnStats> columnStats = getColumnStatsFromAdapter(adapter, schemaName, tableName);
                 for (ColumnStats cs : columnStats) {
                     columnsMap.put(cs.columnName(), new SnapshotCompareVo.ColumnSnapshotData(
                         cs.columnName(),
@@ -313,11 +318,19 @@ public class DprofileSnapshotServiceImpl implements IDprofileSnapshotService {
         }
     }
 
-    private TableStats getTableStatsFromAdapter(DataSourceAdapter adapter, String tableName) {
-        long rowCount = adapter.getRowCount(tableName);
-        var columns = adapter.getColumns(tableName);
-        String comment = adapter.getTableComment(tableName);
-        var lastModified = adapter.getTableLastUpdateTime(tableName);
+    private TableStats getTableStatsFromAdapter(DataSourceAdapter adapter, String schemaName, String tableName) {
+        long rowCount = StringUtils.isNotBlank(schemaName)
+            ? adapter.getRowCount(schemaName, tableName)
+            : adapter.getRowCount(tableName);
+        var columns = StringUtils.isNotBlank(schemaName)
+            ? adapter.getColumns(schemaName, tableName)
+            : adapter.getColumns(tableName);
+        String comment = StringUtils.isNotBlank(schemaName)
+            ? adapter.getTableComment(schemaName, tableName)
+            : adapter.getTableComment(tableName);
+        var lastModified = StringUtils.isNotBlank(schemaName)
+            ? adapter.getTableLastUpdateTime(schemaName, tableName)
+            : adapter.getTableLastUpdateTime(tableName);
 
         return new TableStats(
             tableName,
@@ -329,8 +342,10 @@ public class DprofileSnapshotServiceImpl implements IDprofileSnapshotService {
         );
     }
 
-    private List<ColumnStats> getColumnStatsFromAdapter(DataSourceAdapter adapter, String tableName) {
-        var columns = adapter.getColumns(tableName);
+    private List<ColumnStats> getColumnStatsFromAdapter(DataSourceAdapter adapter, String schemaName, String tableName) {
+        var columns = StringUtils.isNotBlank(schemaName)
+            ? adapter.getColumns(schemaName, tableName)
+            : adapter.getColumns(tableName);
         List<ColumnStats> result = new ArrayList<>();
 
         for (var col : columns) {

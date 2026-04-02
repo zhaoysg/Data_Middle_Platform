@@ -17,6 +17,8 @@
         <result property="password" column="password"/>
         <result property="connectionParams" column="connection_params"/>
         <result property="dataLayer" column="data_layer"/>
+        <result property="dataSource" column="data_source"/>
+        <result property="dsFlag" column="ds_flag"/>
         <result property="deptId" column="dept_id"/>
         <result property="deptName" column="dept_name"/>
         <result property="status" column="status"/>
