@@ -105,6 +105,28 @@ public class GovLineageVo implements Serializable {
     private Integer level;
 
     /**
+     * 数据分层编码（ODS/DWD/DWS/ADS/DIM）
+     * 从 metadata_table 表关联获取
+     */
+    private String layerCode;
+
+    /**
+     * 数据分层名称
+     */
+    private String layerName;
+
+    /**
+     * 敏感字段数量（从 sec_column_sensitivity 表统计）
+     */
+    private Integer sensitiveCount;
+
+    /**
+     * 最高敏感等级（HIGH/MEDIUM/LOW）
+     * 取该表所有敏感字段中的最高等级
+     */
+    private String sensitivityLevel;
+
+    /**
      * 创建时间
      */
     private java.time.LocalDateTime createTime;

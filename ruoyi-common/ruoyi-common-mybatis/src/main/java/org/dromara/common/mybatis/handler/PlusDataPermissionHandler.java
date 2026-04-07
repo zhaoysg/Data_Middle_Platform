@@ -84,8 +84,6 @@ public class PlusDataPermissionHandler {
             }
         } catch (JSQLParserException e) {
             throw new ServiceException("数据权限解析异常 => " + e.getMessage());
-        } finally {
-            DataPermissionHelper.removePermission();
         }
     }
 

@@ -5,9 +5,9 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.datasource.domain.SysDatasource;
-import org.dromara.datasource.mapper.SysDatasourceMapper;
 import org.dromara.metadata.domain.MetadataScanLog;
 import org.dromara.metadata.domain.bo.MetadataScanBo;
 import org.dromara.metadata.domain.vo.MetadataScanLogVo;
@@ -15,6 +15,7 @@ import org.dromara.metadata.domain.vo.MetadataScanResultVo;
 import org.dromara.metadata.mapper.MetadataScanLogMapper;
 import org.dromara.metadata.service.IMetadataScanLogService;
 import org.dromara.metadata.service.IMetadataScanService;
+import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Service;
 
@@ -34,14 +35,11 @@ public class MetadataScanLogServiceImpl implements IMetadataScanLogService {
 
     private final MetadataScanLogMapper scanLogMapper;
     private final IMetadataScanService scanService;
-    private final SysDatasourceMapper sysDatasourceMapper;
+    private final DatasourceHelper datasourceHelper;
 
     @Override
     public Long createScanLog(Long dsId, String scanType) {
-        SysDatasource ds = sysDatasourceMapper.selectById(dsId);
-        if (ds == null) {
-            throw new IllegalArgumentException("数据源不存在: " + dsId);
-        }
+        SysDatasource ds = datasourceHelper.getSysDatasource(dsId);
 
         MetadataScanLog scanLog = new MetadataScanLog();
         scanLog.setDsId(ds.getDsId());
@@ -88,13 +86,22 @@ public class MetadataScanLogServiceImpl implements IMetadataScanLogService {
 
     @Override
     public MetadataScanLogVo getScanLog(Long id) {
-        return scanLogMapper.selectVoById(id);
+        MetadataScanLog scanLog = scanLogMapper.selectById(id);
+        if (scanLog == null) {
+            return null;
+        }
+        datasourceHelper.getSysDatasource(scanLog.getDsId());
+        return MapstructUtils.convert(scanLog, MetadataScanLogVo.class);
     }
 
     @Override
     public List<MetadataScanLogVo> listByDsId(Long dsId) {
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(dsId);
+        if (accessibleDsIds.isEmpty()) {
+            return List.of();
+        }
         LambdaQueryWrapper<MetadataScanLog> lqw = Wrappers.lambdaQuery();
-        lqw.eq(MetadataScanLog::getDsId, dsId);
+        lqw.in(MetadataScanLog::getDsId, accessibleDsIds);
         lqw.orderByDesc(MetadataScanLog::getStartTime);
         return scanLogMapper.selectVoList(lqw);
     }

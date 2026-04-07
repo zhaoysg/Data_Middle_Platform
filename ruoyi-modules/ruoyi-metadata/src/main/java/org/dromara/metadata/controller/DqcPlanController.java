@@ -8,7 +8,9 @@ import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.web.core.BaseController;
 import org.dromara.metadata.domain.DqcPlan;
+import org.dromara.metadata.domain.DqcPlanRule;
 import org.dromara.metadata.domain.bo.DqcPlanBo;
+import org.dromara.metadata.domain.bo.DqcPlanRuleBindBo;
 import org.dromara.metadata.domain.vo.DqcPlanVo;
 import org.dromara.metadata.service.IDqcPlanService;
 import org.springframework.validation.annotation.Validated;
@@ -92,9 +94,20 @@ public class DqcPlanController extends BaseController {
      */
     @SaCheckPermission("metadata:dqc:plan:edit")
     @Log(title = "数据质量检测方案-绑定规则")
-    @PostMapping("/bindRules")
-    public R<Void> bindRules(@RequestParam Long planId, @RequestBody List<Long> ruleIds) {
-        return toAjax(planService.bindRules(planId, ruleIds));
+    @PostMapping("/{planId}/rules")
+    public R<Void> bindRules(
+            @PathVariable Long planId,
+            @RequestBody List<DqcPlanRuleBindBo> ruleBindings) {
+        return toAjax(planService.bindRules(planId, ruleBindings));
+    }
+
+    /**
+     * 获取方案已绑定的规则列表
+     */
+    @SaCheckPermission("metadata:dqc:plan:query")
+    @GetMapping("/{planId}/rules")
+    public R<List<DqcPlanRule>> getBoundRules(@PathVariable Long planId) {
+        return R.ok(planService.getBoundRules(planId));
     }
 
     /**

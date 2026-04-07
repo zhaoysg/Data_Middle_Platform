@@ -97,7 +97,7 @@ public class DqcExecution extends BaseEntity implements Serializable {
     private BigDecimal overallScore;
 
     /**
-     * 状态：RUNNING/SUCCESS/FAILED/PARTIAL
+     * 状态：RUNNING/SUCCESS/FAILED/PARTIAL/STOPPED
      */
     private String status;
 

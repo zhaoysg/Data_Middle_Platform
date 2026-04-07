@@ -1,113 +1,127 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { computed, ref } from 'vue';
 import { Steps, Button, Space } from 'ant-design-vue';
-import { Drawer } from 'ant-design-vue';
 
-interface Step {
+export interface WizardStep {
   title: string;
   description?: string;
 }
 
-interface Props {
-  title?: string;
-  steps?: Step[];
-  width?: number | string;
+export interface WizardDrawerProps {
+  steps?: WizardStep[];
   loading?: boolean;
-  closable?: boolean;
 }
 
-const props = withDefaults(defineProps<Props>(), {
-  title: '向导',
-  width: 720,
+const props = withDefaults(defineProps<WizardDrawerProps>(), {
   loading: false,
-  closable: true,
 });
 
 const emit = defineEmits<{
-  (e: 'update:visible', val: boolean): void;
-  (e: 'finish', val: any): void;
-  (e: 'step-change', val: number): void;
+  'update:currentStep': [val: number];
+  'next': [];
+  'finish': [val: any];
+  'step-change': [val: number];
 }>();
 
-const visible = defineModel<boolean>('visible', { default: false });
-const currentStep = ref(0);
+const currentStep = defineModel<number>({ default: 0 });
 const submitting = ref(false);
 
 const totalSteps = computed(() => props.steps?.length || 0);
 const isFirstStep = computed(() => currentStep.value === 0);
 const isLastStep = computed(() => currentStep.value === totalSteps.value - 1);
 
-function handleNext() {
+function setStep(s: number) {
+  if (s >= 0 && s < totalSteps.value) {
+    currentStep.value = s;
+    emit('step-change', currentStep.value);
+  }
+}
+
+function nextStep() {
   if (currentStep.value < totalSteps.value - 1) {
     currentStep.value++;
     emit('step-change', currentStep.value);
   }
 }
 
-function handlePrev() {
+function prevStep() {
   if (currentStep.value > 0) {
     currentStep.value--;
     emit('step-change', currentStep.value);
   }
 }
 
-async function handleFinish(data: any) {
+function handleNext() {
+  emit('next');
+}
+
+function handleFinish(data: any) {
   submitting.value = true;
   try {
     emit('finish', data);
-    visible.value = false;
-    currentStep.value = 0;
   } finally {
     submitting.value = false;
   }
 }
 
-function handleClose() {
-  visible.value = false;
-  currentStep.value = 0;
-}
-
-defineExpose({ currentStep, setStep: (s: number) => (currentStep.value = s) });
+defineExpose({
+  setStep,
+  nextStep,
+  prevStep,
+  setSubmitting: (v: boolean) => (submitting.value = v),
+  resetStep: () => (currentStep.value = 0),
+});
 </script>
 
 <template>
-  <Drawer
-    v-model:open="visible"
-    :title="title"
-    :width="width"
-    :closable="closable"
-    :maskClosable="!loading"
-    :destroyOnClose="true"
-    @close="handleClose"
-  >
-    <div class="flex flex-col h-full">
-      <Steps :current="currentStep" size="small" class="mb-6" :items="steps" />
+  <div class="flex flex-col h-full wizard-body">
+    <Steps
+      v-if="steps && steps.length > 0"
+      :current="currentStep"
+      size="small"
+      class="mb-6 wizard-steps"
+      :items="steps"
+    />
 
-      <div class="flex-1 overflow-auto min-h-0">
-        <slot :name="'step-' + currentStep" />
-      </div>
-
-      <div class="flex justify-end gap-3 pt-4 border-t mt-4">
-        <Space>
-          <Button v-if="!isFirstStep" :disabled="loading" @click="handlePrev">
-            上一步
-          </Button>
-          <Button v-if="!isLastStep" type="primary" :disabled="loading" @click="handleNext">
-            下一步
-          </Button>
-          <Button
-            v-if="isLastStep"
-            type="primary"
-            :loading="submitting || loading"
-            @click="emit('finish', $event)"
-          >
-            保存
-          </Button>
-          <Button :disabled="submitting || loading" @click="handleClose">
-            取消
-          </Button>
-        </Space>
-      </div>
+    <div class="flex-1 overflow-auto min-h-0 wizard-content">
+      <slot :name="'step-' + currentStep" />
     </div>
-  </Drawer>
+
+    <div class="flex justify-end gap-3 pt-4 border-t mt-4 wizard-footer">
+      <Space>
+        <Button v-if="!isFirstStep" :disabled="loading || submitting" @click="prevStep">
+          上一步
+        </Button>
+        <Button v-if="!isLastStep" type="primary" :disabled="loading || submitting" @click="handleNext">
+          下一步
+        </Button>
+        <Button
+          v-if="isLastStep"
+          type="primary"
+          :loading="submitting || loading"
+          @click="handleFinish($event)"
+        >
+          保存
+        </Button>
+      </Space>
+    </div>
+  </div>
 </template>
+
+<style scoped>
+.wizard-body {
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.wizard-steps {
+  flex-shrink: 0;
+}
+.wizard-content {
+  flex: 1;
+  min-height: 0;
+}
+.wizard-footer {
+  flex-shrink: 0;
+}
+</style>

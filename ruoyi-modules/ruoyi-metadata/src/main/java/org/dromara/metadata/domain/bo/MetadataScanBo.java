@@ -67,4 +67,14 @@ public class MetadataScanBo implements Serializable {
      * 自定义 schema，未传则使用数据源默认 schema
      */
     private String schemaName;
+
+    /**
+     * 强制指定数据层（如 ODS/DWD/DWS/ADS），覆盖自动推断
+     */
+    private String dataLayer;
+
+    /**
+     * 扫描完成后自动触发下游处理链（敏感识别/血缘/DQC/脱敏）
+     */
+    private Boolean autoDownstreamProcess = true;
 }

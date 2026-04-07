@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
@@ -14,13 +15,15 @@ import org.dromara.metadata.domain.DqcPlanRule;
 import org.dromara.metadata.domain.DqcRuleDef;
 import org.dromara.metadata.domain.bo.DqcRuleDefBo;
 import org.dromara.metadata.domain.vo.DqcRuleDefVo;
+import org.dromara.metadata.engine.executor.CustomSqlExecutor;
+import org.dromara.metadata.engine.executor.CustomSqlSecuritySupport;
 import org.dromara.metadata.mapper.DqcPlanRuleMapper;
 import org.dromara.metadata.mapper.DqcRuleDefMapper;
 import org.dromara.metadata.service.IDqcRuleDefService;
+import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
 import java.util.List;
 
 /**
@@ -33,6 +36,7 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
 
     private final DqcRuleDefMapper baseMapper;
     private final DqcPlanRuleMapper planRuleMapper;
+    private final DatasourceHelper datasourceHelper;
 
     @Override
     public TableDataInfo<DqcRuleDefVo> pageRuleList(DqcRuleDefBo bo, PageQuery pageQuery) {
@@ -43,11 +47,12 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
 
     @Override
     public DqcRuleDefVo getRuleById(Long id) {
-        return baseMapper.selectVoById(id);
+        return MapstructUtils.convert(requireAccessibleRule(id), DqcRuleDefVo.class);
     }
 
     @Override
     public Long insertRule(DqcRuleDefBo bo) {
+        validateRuleDefinition(bo);
         DqcRuleDef entity = MapstructUtils.convert(bo, DqcRuleDef.class);
         if (entity.getEnabled() == null) {
             entity.setEnabled("1");
@@ -61,12 +66,17 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
 
     @Override
     public int updateRule(DqcRuleDefBo bo) {
+        requireAccessibleRule(bo.getId());
+        validateRuleDefinition(bo);
         DqcRuleDef entity = MapstructUtils.convert(bo, DqcRuleDef.class);
         return baseMapper.updateById(entity);
     }
 
     @Override
     public int deleteRule(Long[] ids) {
+        for (Long id : ids) {
+            requireAccessibleRule(id);
+        }
         return baseMapper.deleteBatchIds(List.of(ids));
     }
 
@@ -87,15 +97,23 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
             .map(DqcPlanRule::getRuleId)
             .toList();
 
+        List<Long> accessibleDsIds = datasourceHelper.listAccessibleDatasourceIds();
+        if (accessibleDsIds.isEmpty()) {
+            return List.of();
+        }
         return baseMapper.selectVoList(
             Wrappers.<DqcRuleDef>lambdaQuery()
                 .in(DqcRuleDef::getId, ruleIds)
+                .in(DqcRuleDef::getTargetDsId, accessibleDsIds)
         );
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public int bindRules(Long planId, List<Long> ruleIds) {
+        for (Long ruleId : ruleIds) {
+            requireAccessibleRule(ruleId);
+        }
         // 先删除旧关联
         planRuleMapper.delete(
             Wrappers.<DqcPlanRule>lambdaQuery()
@@ -123,6 +141,7 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
 
     private Wrapper<DqcRuleDef> buildQueryWrapper(DqcRuleDefBo bo) {
         LambdaQueryWrapper<DqcRuleDef> wrapper = Wrappers.lambdaQuery();
+        applyAccessibleDatasourceFilter(wrapper, bo.getTargetDsId());
         wrapper.like(StringUtils.isNotBlank(bo.getRuleName()), DqcRuleDef::getRuleName, bo.getRuleName())
             .like(StringUtils.isNotBlank(bo.getRuleCode()), DqcRuleDef::getRuleCode, bo.getRuleCode())
             .eq(ObjectUtil.isNotNull(bo.getTemplateId()), DqcRuleDef::getTemplateId, bo.getTemplateId())
@@ -158,5 +177,45 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
     @Override
     public int deleteByIds(List<Long> ids) {
         return deleteRule(ids.toArray(new Long[0]));
+    }
+
+    private void validateRuleDefinition(DqcRuleDefBo bo) {
+        validateDatasourceAccess(bo.getTargetDsId(), "目标");
+        validateDatasourceAccess(bo.getCompareDsId(), "对比");
+        if (CustomSqlExecutor.TYPE.equalsIgnoreCase(bo.getRuleType())) {
+            CustomSqlSecuritySupport.validateRuleExpr(bo.getRuleExpr());
+        }
+    }
+
+    private void validateDatasourceAccess(Long dsId, String label) {
+        if (dsId != null) {
+            datasourceHelper.getSysDatasource(dsId);
+            return;
+        }
+        if ("目标".equals(label)) {
+            throw new ServiceException("目标数据源不能为空");
+        }
+    }
+
+    private void applyAccessibleDatasourceFilter(LambdaQueryWrapper<DqcRuleDef> wrapper, Long targetDsId) {
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(targetDsId);
+        if (accessibleDsIds.isEmpty()) {
+            wrapper.eq(DqcRuleDef::getId, -1L);
+            return;
+        }
+        wrapper.in(DqcRuleDef::getTargetDsId, accessibleDsIds);
+    }
+
+    private DqcRuleDef requireAccessibleRule(Long id) {
+        if (id == null) {
+            throw new ServiceException("规则ID不能为空");
+        }
+        DqcRuleDef rule = baseMapper.selectById(id);
+        if (rule == null) {
+            throw new ServiceException("规则不存在: " + id);
+        }
+        validateDatasourceAccess(rule.getTargetDsId(), "目标");
+        validateDatasourceAccess(rule.getCompareDsId(), "对比");
+        return rule;
     }
 }

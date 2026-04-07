@@ -109,6 +109,14 @@ public interface ISysDatasourceService {
     List<?> getTableColumns(Long dsId, String tableName, String schema);
 
     /**
+     * 获取数据源的 Schema 列表（PostgreSQL 专用，其他返回空列表）
+     *
+     * @param dsId 数据源ID
+     * @return Schema 名称列表
+     */
+    List<String> getSchemas(Long dsId);
+
+    /**
      * 导出数据源列表
      *
      * @param bo 查询条件

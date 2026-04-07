@@ -15,6 +15,7 @@ import java.time.OffsetDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,6 +29,12 @@ public abstract class AbstractRuleExecutor implements RuleExecutor {
 
     /** 占位符匹配模式 ${xxx} */
     protected static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([a-zA-Z0-9_]+)}");
+
+    /** 检查取消标志的频率（每N行检查一次，避免性能损耗） */
+    protected static final int CANCEL_CHECK_INTERVAL = 100;
+
+    /** 行计数器，用于周期性检查取消标志 */
+    private int rowCounter = 0;
 
     @Override
     public String getType() {
@@ -391,5 +398,25 @@ public abstract class AbstractRuleExecutor implements RuleExecutor {
             return rule.getCompareTable();
         }
         return null;
+    }
+
+    /**
+     * 检查是否已取消，周期性调用以减少Redis访问
+     * @param cancelChecker 取消检查器
+     * @return true表示已取消
+     */
+    protected boolean checkCancelled(Supplier<Boolean> cancelChecker) {
+        if (++rowCounter % CANCEL_CHECK_INTERVAL == 0) {
+            rowCounter = 0;
+            return cancelChecker.get();
+        }
+        return false;
+    }
+
+    /**
+     * 重置计数器（在每个规则执行开始时调用）
+     */
+    public void resetCancelCounter() {
+        this.rowCounter = 0;
     }
 }

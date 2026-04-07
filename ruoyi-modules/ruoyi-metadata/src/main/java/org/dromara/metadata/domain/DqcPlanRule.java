@@ -35,9 +35,29 @@ public class DqcPlanRule extends BaseEntity implements Serializable {
     private Long ruleId;
 
     /**
+     * 目标表名
+     */
+    private String targetTable;
+
+    /**
+     * 目标字段名
+     */
+    private String targetColumn;
+
+    /**
      * 排序号
      */
     private Integer sortOrder;
+
+    /**
+     * 是否启用
+     */
+    private Boolean enabled;
+
+    /**
+     * 失败时是否跳过
+     */
+    private Boolean skipOnFailure;
 
     /**
      * 删除标志

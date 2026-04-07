@@ -7,15 +7,19 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.metadata.domain.MetadataColumn;
+import org.dromara.metadata.domain.MetadataTable;
 import org.dromara.metadata.domain.bo.MetadataColumnBo;
 import org.dromara.metadata.domain.vo.MetadataColumnVo;
 import org.dromara.metadata.mapper.MetadataColumnMapper;
+import org.dromara.metadata.mapper.MetadataTableMapper;
 import org.dromara.metadata.service.IMetadataColumnService;
+import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
@@ -30,6 +34,8 @@ import java.util.List;
 public class MetadataColumnServiceImpl implements IMetadataColumnService {
 
     private final MetadataColumnMapper baseMapper;
+    private final MetadataTableMapper tableMapper;
+    private final DatasourceHelper datasourceHelper;
 
     @Override
     public TableDataInfo<MetadataColumnVo> pageColumnList(MetadataColumnBo bo, PageQuery pageQuery) {
@@ -50,9 +56,9 @@ public class MetadataColumnServiceImpl implements IMetadataColumnService {
 
     private Wrapper<MetadataColumn> buildQueryWrapper(MetadataColumnBo bo) {
         var wrapper = Wrappers.<MetadataColumn>lambdaQuery();
+        applyAccessibleDatasourceFilter(wrapper, bo.getDsId(), bo.getTableId());
 
         wrapper.eq(ObjectUtil.isNotNull(bo.getTableId()), MetadataColumn::getTableId, bo.getTableId())
-            .eq(ObjectUtil.isNotNull(bo.getDsId()), MetadataColumn::getDsId, bo.getDsId())
             .orderByAsc(MetadataColumn::getSortOrder);
 
         if (StringUtils.isNotBlank(bo.getKeyword())) {
@@ -74,20 +80,25 @@ public class MetadataColumnServiceImpl implements IMetadataColumnService {
 
     @Override
     public MetadataColumnVo getColumnById(Long id) {
-        return baseMapper.selectVoById(id);
+        MetadataColumn column = requireAccessibleColumn(id);
+        return MapstructUtils.convert(column, MetadataColumnVo.class);
     }
 
     @Override
     public List<MetadataColumnVo> listByTableId(Long tableId) {
+        MetadataTable table = requireAccessibleTable(tableId);
         return baseMapper.selectVoList(
             Wrappers.<MetadataColumn>lambdaQuery()
-                .eq(MetadataColumn::getTableId, tableId)
+                .eq(MetadataColumn::getTableId, table.getId())
                 .orderByAsc(MetadataColumn::getSortOrder)
         );
     }
 
     @Override
     public int deleteColumn(Long[] ids) {
+        for (Long id : ids) {
+            requireAccessibleColumn(id);
+        }
         return baseMapper.deleteBatchIds(List.of(ids));
     }
 
@@ -119,9 +130,49 @@ public class MetadataColumnServiceImpl implements IMetadataColumnService {
 
     @Override
     public int updateAlias(Long id, String alias) {
+        requireAccessibleColumn(id);
         MetadataColumn column = new MetadataColumn(id);
         column.setColumnAlias(alias);
         return baseMapper.updateById(column);
+    }
+
+    private void applyAccessibleDatasourceFilter(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<MetadataColumn> wrapper,
+                                                 Long dsId, Long tableId) {
+        if (tableId != null) {
+            MetadataTable table = requireAccessibleTable(tableId);
+            wrapper.eq(MetadataColumn::getDsId, table.getDsId());
+            return;
+        }
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(dsId);
+        if (accessibleDsIds.isEmpty()) {
+            wrapper.eq(MetadataColumn::getId, -1L);
+            return;
+        }
+        wrapper.in(MetadataColumn::getDsId, accessibleDsIds);
+    }
+
+    private MetadataTable requireAccessibleTable(Long tableId) {
+        if (tableId == null) {
+            throw new ServiceException("表ID不能为空");
+        }
+        MetadataTable table = tableMapper.selectById(tableId);
+        if (table == null) {
+            throw new ServiceException("元数据表不存在: " + tableId);
+        }
+        datasourceHelper.getSysDatasource(table.getDsId());
+        return table;
+    }
+
+    private MetadataColumn requireAccessibleColumn(Long id) {
+        if (id == null) {
+            throw new ServiceException("字段ID不能为空");
+        }
+        MetadataColumn column = baseMapper.selectById(id);
+        if (column == null) {
+            throw new ServiceException("元数据字段不存在: " + id);
+        }
+        datasourceHelper.getSysDatasource(column.getDsId());
+        return column;
     }
 
     private String normalizeTenantId(String tenantId) {

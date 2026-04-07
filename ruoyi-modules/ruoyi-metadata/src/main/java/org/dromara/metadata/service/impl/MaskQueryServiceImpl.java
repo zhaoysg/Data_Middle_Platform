@@ -41,6 +41,17 @@ public class MaskQueryServiceImpl implements IMaskQueryService {
 
     private static final int DEFAULT_LIMIT = 1000;
 
+    /**
+     * 脱敏模板正则安全校验规则（ReDoS 防护）。
+     * 超过以下任意阈值的表达式将被拒绝：
+     * - 嵌套量词深度 > 2
+     * - 单字符重复量词 (..*) 连续出现 > 1
+     * - 总体复杂度得分 > 10
+     */
+    private static final Pattern REDOS_NESTED = Pattern.compile("(\\.[\\+\\*\\?])\\1+");
+    private static final Pattern REDOS_REPEAT = Pattern.compile("\\(\\.\\+\\)\\.\\*");
+    private static final int MAX_REGEX_COMPLEXITY_SCORE = 10;
+
     private static final List<String> FORBIDDEN_KEYWORDS = List.of(
         "INFORMATION_SCHEMA",
         "MYSQL",
@@ -99,9 +110,9 @@ public class MaskQueryServiceImpl implements IMaskQueryService {
             rows = jdbc.queryForList(maskedSql);
         } catch (Exception e) {
             status = "FAILED";
-            errorMsg = e.getMessage();
+            errorMsg = "查询执行失败，请联系管理员";
             rows = List.of();
-            log.error("脱敏查询执行失败: {}", e.getMessage());
+            log.error("脱敏查询执行失败（已脱敏）: dsId={}", dsId);
         }
 
         boolean truncated = rows.size() >= DEFAULT_LIMIT;
@@ -160,12 +171,68 @@ public class MaskQueryServiceImpl implements IMaskQueryService {
             String expr = templateMap.get(templateCode);
 
             if (expr != null) {
+                validateTemplateRegex(expr);
                 String replacement = applyMaskExpression(expr, columnName);
                 String regex = "(?<![a-zA-Z0-9_`])" + Pattern.quote(columnName) + "(?![a-zA-Z0-9_`])";
                 result = result.replaceAll(regex, replacement);
             }
         }
         return result;
+    }
+
+    /**
+     * 计算字符串中子串出现次数。
+     */
+    private static int countOccurrences(String str, String sub) {
+        if (str == null || sub == null || sub.isEmpty()) {
+            return 0;
+        }
+        int count = 0;
+        int idx = 0;
+        while ((idx = str.indexOf(sub, idx)) != -1) {
+            count++;
+            idx += sub.length();
+        }
+        return count;
+    }
+
+    /**
+     * 校验脱敏模板表达式是否安全（ReDoS 防护）。
+     * 检查嵌套量词深度、连续重复量词、总体复杂度评分。
+     *
+     * @param expr 脱敏模板表达式（如 "CONCAT(LEFT({col},3),'****')" 或含正则的表达式）
+     * @throws ServiceException 表达式存在 ReDoS 风险
+     */
+    private void validateTemplateRegex(String expr) {
+        if (expr == null || expr.isBlank()) {
+            return;
+        }
+
+        // 1. 拒绝包含潜在正则元字符的危险模式
+        if (expr.matches(".*\\{\\s*\\{.*") || expr.contains("${")) {
+            throw new ServiceException("脱敏模板表达式包含不安全的模板语法");
+        }
+
+        // 2. 检测嵌套量词（如 .++ 或 .**）
+        if (REDOS_NESTED.matcher(expr).find()) {
+            throw new ServiceException("脱敏模板表达式存在 ReDoS 风险（嵌套量词）");
+        }
+
+        // 3. 检测贪婪 .+.+ 模式（典型 ReDoS 构造）
+        if (REDOS_REPEAT.matcher(expr).find()) {
+            throw new ServiceException("脱敏模板表达式存在 ReDoS 风险（重复量词）");
+        }
+
+        // 4. 计算复杂度评分（粗略估算）
+        int complexityScore = 0;
+        complexityScore += expr.length() / 50;
+        complexityScore += countOccurrences(expr, ".*") * 2;
+        complexityScore += countOccurrences(expr, ".+") * 2;
+        complexityScore += countOccurrences(expr, ".{");
+        complexityScore += countOccurrences(expr, "?") * 2;
+        if (complexityScore > MAX_REGEX_COMPLEXITY_SCORE) {
+            throw new ServiceException("脱敏模板表达式复杂度超出限制");
+        }
     }
 
     private String applyMaskExpression(String maskExpr, String colName) {

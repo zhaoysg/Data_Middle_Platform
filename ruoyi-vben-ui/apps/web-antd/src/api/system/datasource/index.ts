@@ -122,3 +122,14 @@ export function datasourceColumns(dsId: ID, tableName: string, schema?: string) 
     { params: { tableName, schema } },
   );
 }
+
+/**
+ * 获取数据源的 Schema 列表（PostgreSQL 专用）
+ * @param dsId 数据源ID
+ * @returns Schema 名称列表
+ */
+export function datasourceSchemas(dsId: ID) {
+  return requestClient.get<string[]>(
+    `/system/datasource/${dsId}/schemas`,
+  );
+}

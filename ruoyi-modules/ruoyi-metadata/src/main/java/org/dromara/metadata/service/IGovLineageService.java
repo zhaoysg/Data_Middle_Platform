@@ -76,4 +76,13 @@ public interface IGovLineageService {
      * 查询血缘关系列表
      */
     List<GovLineageVo> listLineage(GovLineageBo bo);
+
+    /**
+     * 自动发现并写入血缘关系
+     *
+     * @param dsId      数据源ID
+     * @param tableName 表名
+     * @return 发现的血缘记录数
+     */
+    int autoDiscover(Long dsId, String tableName);
 }

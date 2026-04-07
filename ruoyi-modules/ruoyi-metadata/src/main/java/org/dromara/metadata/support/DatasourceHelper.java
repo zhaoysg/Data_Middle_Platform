@@ -2,6 +2,8 @@ package org.dromara.metadata.support;
 
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.mybatis.annotation.DataColumn;
+import org.dromara.common.mybatis.annotation.DataPermission;
 import org.dromara.datasource.adapter.DataSourceAdapter;
 import org.dromara.datasource.adapter.DataSourceAdapterRegistry;
 import org.dromara.datasource.domain.SysDatasource;
@@ -11,6 +13,8 @@ import org.dromara.datasource.support.DatasourceCryptoSupport;
 import org.dromara.common.core.exception.ServiceException;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.stereotype.Component;
+
+import java.util.List;
 
 /**
  * 数据源工具类
@@ -48,6 +52,9 @@ public class DatasourceHelper {
      * @return 数据源配置实体（密码字段已解密，仅存在于内存中）
      * @throws ServiceException 数据源不存在或已删除
      */
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
     public SysDatasource getSysDatasource(Long dsId) {
         SysDatasource ds = sysDatasourceMapper.selectById(dsId);
         if (ds == null) {
@@ -72,6 +79,9 @@ public class DatasourceHelper {
      * @return JdbcTemplate 实例
      * @throws ServiceException 数据源不存在或已删除
      */
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
     public JdbcTemplate getJdbcTemplate(Long dsId) {
         SysDatasource ds = getSysDatasource(dsId);
         // 动态注册到连接池（如尚未注册）
@@ -109,6 +119,9 @@ public class DatasourceHelper {
      * @return DataSourceAdapter 实例（永不为 null，失败时抛异常）
      * @throws ServiceException 数据源不存在或类型不支持
      */
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
     public DataSourceAdapter getAdapter(Long dsId) {
         SysDatasource ds = getSysDatasource(dsId);
         String password = cryptoSupport.decryptPassword(ds.getPassword());
@@ -124,6 +137,35 @@ public class DatasourceHelper {
             ds.getConnectionParams()
         );
         return adapter;
+    }
+
+    /**
+     * 获取当前用户可访问的数据源ID列表。
+     */
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
+    public List<Long> listAccessibleDatasourceIds() {
+        return sysDatasourceMapper.selectList(
+                new com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<SysDatasource>()
+                    .select(SysDatasource::getDsId)
+            ).stream()
+            .map(SysDatasource::getDsId)
+            .toList();
+    }
+
+    /**
+     * 解析请求允许访问的数据源ID集合。
+     */
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
+    public List<Long> resolveAccessibleDatasourceIds(Long dsId) {
+        if (dsId != null) {
+            getSysDatasource(dsId);
+            return List.of(dsId);
+        }
+        return listAccessibleDatasourceIds();
     }
 
     /**

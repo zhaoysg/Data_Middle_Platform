@@ -81,7 +81,12 @@ public interface IDqcPlanService {
     /**
      * 绑定规则到方案
      */
-    int bindRules(Long planId, List<Long> ruleIds);
+    int bindRules(Long planId, List<DqcPlanRuleBindBo> ruleBindings);
+
+    /**
+     * 获取方案已绑定的规则列表
+     */
+    List<DqcPlanRule> getBoundRules(Long planId);
 
     /**
      * 查询方案列表
@@ -92,4 +97,13 @@ public interface IDqcPlanService {
      * 获取方案选项列表
      */
     List<DqcPlanVo> options();
+
+    /**
+     * 为新扫描的表关联默认质检方案
+     *
+     * @param dsId      数据源ID
+     * @param tableName 表名
+     * @return 绑定数量
+     */
+    int associateDefaultPlan(Long dsId, String tableName);
 }

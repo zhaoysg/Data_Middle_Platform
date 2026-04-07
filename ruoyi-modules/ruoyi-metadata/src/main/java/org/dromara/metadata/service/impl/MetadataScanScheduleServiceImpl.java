@@ -7,6 +7,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
@@ -19,6 +20,7 @@ import org.dromara.metadata.domain.vo.MetadataScanResultVo;
 import org.dromara.metadata.mapper.MetadataScanScheduleMapper;
 import org.dromara.metadata.service.IMetadataScanScheduleService;
 import org.dromara.metadata.service.IMetadataScanService;
+import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDateTime;
@@ -35,6 +37,7 @@ public class MetadataScanScheduleServiceImpl implements IMetadataScanScheduleSer
 
     private final MetadataScanScheduleMapper baseMapper;
     private final IMetadataScanService scanService;
+    private final DatasourceHelper datasourceHelper;
 
     @Override
     public TableDataInfo<MetadataScanScheduleVo> queryPageList(MetadataScanScheduleBo bo, PageQuery pageQuery) {
@@ -45,11 +48,12 @@ public class MetadataScanScheduleServiceImpl implements IMetadataScanScheduleSer
 
     @Override
     public MetadataScanScheduleVo queryById(Long id) {
-        return baseMapper.selectVoById(id);
+        return MapstructUtils.convert(requireAccessibleSchedule(id), MetadataScanScheduleVo.class);
     }
 
     @Override
     public Long insertByBo(MetadataScanScheduleBo bo) {
+        datasourceHelper.getSysDatasource(bo.getDsId());
         MetadataScanSchedule entity = MapstructUtils.convert(bo, MetadataScanSchedule.class);
         baseMapper.insert(entity);
         return entity.getId();
@@ -57,18 +61,24 @@ public class MetadataScanScheduleServiceImpl implements IMetadataScanScheduleSer
 
     @Override
     public int updateByBo(MetadataScanScheduleBo bo) {
+        requireAccessibleSchedule(bo.getId());
+        datasourceHelper.getSysDatasource(bo.getDsId());
         MetadataScanSchedule entity = MapstructUtils.convert(bo, MetadataScanSchedule.class);
         return baseMapper.updateById(entity);
     }
 
     @Override
     public int updateEnabled(MetadataScanScheduleBo bo) {
+        requireAccessibleSchedule(bo.getId());
         MetadataScanSchedule entity = MapstructUtils.convert(bo, MetadataScanSchedule.class);
         return baseMapper.updateById(entity);
     }
 
     @Override
     public int deleteByIds(List<Long> ids) {
+        for (Long id : ids) {
+            requireAccessibleSchedule(id);
+        }
         return baseMapper.deleteBatchIds(ids);
     }
 
@@ -83,10 +93,7 @@ public class MetadataScanScheduleServiceImpl implements IMetadataScanScheduleSer
 
     @Override
     public MetadataScanResultVo executeScan(Long scheduleId) {
-        MetadataScanSchedule schedule = baseMapper.selectById(scheduleId);
-        if (schedule == null) {
-            throw new IllegalArgumentException("扫描调度不存在: " + scheduleId);
-        }
+        MetadataScanSchedule schedule = requireAccessibleSchedule(scheduleId);
         if (schedule.getDsId() == null) {
             throw new IllegalArgumentException("扫描调度未配置数据源");
         }
@@ -147,11 +154,32 @@ public class MetadataScanScheduleServiceImpl implements IMetadataScanScheduleSer
 
     private Wrapper<MetadataScanSchedule> buildQueryWrapper(MetadataScanScheduleBo bo) {
         LambdaQueryWrapper<MetadataScanSchedule> wrapper = Wrappers.lambdaQuery();
-        wrapper.eq(ObjectUtil.isNotNull(bo.getDsId()), MetadataScanSchedule::getDsId, bo.getDsId())
-            .like(StringUtils.isNotBlank(bo.getDsName()), MetadataScanSchedule::getDsName, bo.getDsName())
+        applyAccessibleDatasourceFilter(wrapper, bo.getDsId());
+        wrapper.like(StringUtils.isNotBlank(bo.getDsName()), MetadataScanSchedule::getDsName, bo.getDsName())
             .eq(StringUtils.isNotBlank(bo.getScheduleType()), MetadataScanSchedule::getScheduleType, bo.getScheduleType())
             .eq(StringUtils.isNotBlank(bo.getEnabled()), MetadataScanSchedule::getEnabled, bo.getEnabled())
             .orderByDesc(MetadataScanSchedule::getCreateTime);
         return wrapper;
+    }
+
+    private void applyAccessibleDatasourceFilter(LambdaQueryWrapper<MetadataScanSchedule> wrapper, Long dsId) {
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(dsId);
+        if (accessibleDsIds.isEmpty()) {
+            wrapper.eq(MetadataScanSchedule::getId, -1L);
+            return;
+        }
+        wrapper.in(MetadataScanSchedule::getDsId, accessibleDsIds);
+    }
+
+    private MetadataScanSchedule requireAccessibleSchedule(Long id) {
+        if (id == null) {
+            throw new ServiceException("扫描调度ID不能为空");
+        }
+        MetadataScanSchedule schedule = baseMapper.selectById(id);
+        if (schedule == null) {
+            throw new ServiceException("扫描调度不存在: " + id);
+        }
+        datasourceHelper.getSysDatasource(schedule.getDsId());
+        return schedule;
     }
 }

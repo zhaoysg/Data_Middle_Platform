@@ -2,15 +2,21 @@ package org.dromara.datasource.adapter;
 
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.datasource.manager.DynamicDataSourceManager;
+import org.springframework.jdbc.core.ConnectionCallback;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.core.RowMapper;
 import org.springframework.stereotype.Component;
 
+import java.sql.PreparedStatement;
 import java.sql.ResultSet;
+import java.sql.ResultSetMetaData;
 import java.sql.SQLException;
 import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * MySQL / TiDB 数据源适配器
@@ -71,6 +77,56 @@ public class MySQLAdapter implements DataSourceAdapter {
     @Override
     public List<Map<String, Object>> executeQuery(String sql, Object... params) {
         return getJdbcTemplate().queryForList(sql, params);
+    }
+
+    @Override
+    public List<Map<String, Object>> executeQueryCancellable(String sql, Supplier<Boolean> cancelChecker) {
+        return getJdbcTemplate().execute((ConnectionCallback<List<Map<String, Object>>>) conn -> {
+            try (PreparedStatement stmt = conn.prepareStatement(sql);
+                 ResultSet rs = stmt.executeQuery()) {
+                List<Map<String, Object>> result = new ArrayList<>();
+                ResultSetMetaData md = rs.getMetaData();
+                int cols = md.getColumnCount();
+                while (rs.next()) {
+                    if (cancelChecker.get()) {
+                        throw new SQLException("查询已被取消");
+                    }
+                    Map<String, Object> row = new HashMap<>();
+                    for (int i = 1; i <= cols; i++) {
+                        row.put(md.getColumnLabel(i), rs.getObject(i));
+                    }
+                    result.add(row);
+                }
+                return result;
+            }
+        });
+    }
+
+    @Override
+    public List<Map<String, Object>> executeQueryCancellable(String sql, Supplier<Boolean> cancelChecker, Object... params) {
+        return getJdbcTemplate().execute((ConnectionCallback<List<Map<String, Object>>>) conn -> {
+            try (PreparedStatement pstmt = conn.prepareStatement(sql)) {
+                for (int i = 0; i < params.length; i++) {
+                    pstmt.setObject(i + 1, params[i]);
+                }
+                try (ResultSet rs = pstmt.executeQuery()) {
+                    List<Map<String, Object>> result = new ArrayList<>();
+                    ResultSetMetaData md = rs.getMetaData();
+                    int cols = md.getColumnCount();
+                    while (rs.next()) {
+                        if (cancelChecker.get()) {
+                            throw new SQLException("查询已被取消");
+                        }
+                        Map<String, Object> row = new HashMap<>();
+                        for (int i = 1; i <= cols; i++) {
+                            row.put(md.getColumnLabel(i), rs.getObject(i));
+                        }
+                        result.add(row);
+                    }
+                    return result;
+                }
+            }
+        });
     }
 
     @Override

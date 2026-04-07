@@ -1,0 +1,38 @@
+{
+  "date": "2026-04-06",
+  "url": "http://localhost:5666/data-platform/dqc/template",
+  "healthScore": 95,
+  "issues": [
+    {
+      "id": "ISSUE-001",
+      "title": "搜索表单模板名称输入框显示 'undefined' 前缀",
+      "severity": "High",
+      "category": "Functional",
+      "status": "verified"
+    },
+    {
+      "id": "ISSUE-002",
+      "title": "新增/编辑抽屉的取消按钮点击无效",
+      "severity": "Medium",
+      "category": "Functional",
+      "status": "verified"
+    },
+    {
+      "id": "ISSUE-003",
+      "title": "表格启用/禁用开关被 tooltip 遮挡无法点击",
+      "severity": "Medium",
+      "category": "Visual / UX",
+      "status": "verified"
+    }
+  ],
+  "categoryScores": {
+    "console": 100,
+    "links": 100,
+    "visual": 92,
+    "functional": 90,
+    "ux": 92,
+    "content": 100,
+    "performance": 100,
+    "accessibility": 100
+  }
+}

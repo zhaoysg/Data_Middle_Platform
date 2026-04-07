@@ -47,4 +47,13 @@ public interface ISecMaskStrategyService {
      * 删除策略
      */
     int deleteByIds(Long[] ids);
+
+    /**
+     * 自动将高敏感字段绑定脱敏模板
+     *
+     * @param dsId      数据源ID
+     * @param tableName 表名
+     * @return 应用数量
+     */
+    int autoApply(Long dsId, String tableName);
 }

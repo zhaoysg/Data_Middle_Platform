@@ -208,20 +208,62 @@ export interface DqcPlan {
   planCode?: string;
   planName?: string;
   planDesc?: string;
+  bindType?: string; // TABLE / SENSITIVITY_LEVEL
+  bindValue?: string; // JSON: { dsId, schema, tables, bindSensitivityLevel }
   dsId?: number;
   dsName?: string;
   layerCode?: string;
-  scanMode?: string; // INCLUDE/EXCLUDE/REGEX
-  tablePattern?: string;
-  triggerType?: string; // MANUAL/SCHEDULE/API
-  cronExpr?: string;
+  triggerType?: string; // MANUAL / SCHEDULE / API
+  triggerCron?: string;
+  alertOnFailure?: string; // '1' = 告警
+  alertOnSuccess?: string;
+  autoBlock?: string; // '1' = 阻塞
+  bindSensitivityLevel?: string; // L1/L2/L3/L4
+  status?: string; // DRAFT / PUBLISHED / DISABLED
+  ruleCount?: number;
+  tableCount?: number;
+  lastExecutionId?: number;
+  lastScore?: number;
+  lastExecutionTime?: string;
+  sensitivityLevel?: string;
+  sensitivityComplianceRate?: number;
   enabled?: string;
-  status?: string; // DRAFT/RUNNING/SUCCESS/FAILED/STOPPED
-  totalRules?: number;
   createBy?: string;
   createTime?: string;
   updateBy?: string;
   updateTime?: string;
+}
+
+/** DQC方案-规则绑定记录 */
+export interface DqcPlanRule {
+  id?: number;
+  planId?: number;
+  ruleId?: number;
+  targetTable?: string;
+  targetColumn?: string;
+  sortOrder?: number;
+  skipOnFailure?: boolean;
+  enabled?: boolean;
+  createBy?: string;
+  createTime?: string;
+}
+
+/** 规则选择器中的规则项 */
+export interface DqcRuleSelectorItem {
+  id?: number;
+  ruleCode?: string;
+  ruleName?: string;
+  templateId?: number;
+  templateName?: string;
+  ruleType?: string;
+  applyLevel?: string;
+  dimension?: string;
+  errorLevel?: string;
+  ruleStrength?: string;
+  ruleExpr?: string;
+  defaultExpr?: string;
+  paramSpec?: string;
+  enabled?: string;
 }
 
 /** DQC执行记录 */

@@ -7,16 +7,17 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
-import org.dromara.common.tenant.helper.TenantHelper;
 import org.dromara.metadata.domain.MetadataTable;
 import org.dromara.metadata.domain.bo.MetadataTableBo;
 import org.dromara.metadata.domain.vo.MetadataTableVo;
 import org.dromara.metadata.mapper.MetadataTableMapper;
 import org.dromara.metadata.service.IMetadataTableService;
+import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
 
 import java.util.Arrays;
@@ -32,6 +33,7 @@ import java.util.List;
 public class MetadataTableServiceImpl implements IMetadataTableService {
 
     private final MetadataTableMapper baseMapper;
+    private final DatasourceHelper datasourceHelper;
 
     @Override
     public TableDataInfo<MetadataTableVo> pageTableList(MetadataTableBo bo, PageQuery pageQuery) {
@@ -53,9 +55,9 @@ public class MetadataTableServiceImpl implements IMetadataTableService {
 
     private Wrapper<MetadataTable> buildQueryWrapper(MetadataTableBo bo) {
         var wrapper = Wrappers.<MetadataTable>lambdaQuery();
+        applyAccessibleDatasourceFilter(wrapper, bo.getDsId());
 
-        wrapper.eq(ObjectUtil.isNotNull(bo.getDsId()), MetadataTable::getDsId, bo.getDsId())
-            .eq(StringUtils.isNotBlank(bo.getDataLayer()), MetadataTable::getDataLayer, bo.getDataLayer())
+        wrapper.eq(StringUtils.isNotBlank(bo.getDataLayer()), MetadataTable::getDataLayer, bo.getDataLayer())
             .eq(StringUtils.isNotBlank(bo.getDataDomain()), MetadataTable::getDataDomain, bo.getDataDomain())
             .eq(StringUtils.isNotBlank(bo.getStatus()), MetadataTable::getStatus, bo.getStatus())
             .orderByDesc(MetadataTable::getLastScanTime);
@@ -80,7 +82,8 @@ public class MetadataTableServiceImpl implements IMetadataTableService {
 
     @Override
     public MetadataTableVo getTableById(Long id) {
-        return baseMapper.selectVoById(id);
+        MetadataTable table = requireAccessibleTable(id);
+        return MapstructUtils.convert(table, MetadataTableVo.class);
     }
 
     @Override
@@ -92,17 +95,33 @@ public class MetadataTableServiceImpl implements IMetadataTableService {
 
     @Override
     public int updateTable(MetadataTableBo bo) {
-        MetadataTable entity = MapstructUtils.convert(bo, MetadataTable.class);
+        MetadataTable existing = requireAccessibleTable(bo.getId());
+        MetadataTable entity = new MetadataTable(bo.getId());
+        entity.setTableAlias(bo.getTableAlias());
+        entity.setTableComment(bo.getTableComment());
+        entity.setDataLayer(bo.getDataLayer());
+        entity.setDataDomain(bo.getDataDomain());
+        entity.setSensitivityLevel(bo.getSensitivityLevel());
+        entity.setOwnerId(bo.getOwnerId());
+        entity.setDeptId(bo.getDeptId());
+        entity.setCatalogId(bo.getCatalogId());
+        entity.setTags(bo.getTags());
+        entity.setStatus(bo.getStatus());
+        entity.setDsId(existing.getDsId());
         return baseMapper.updateById(entity);
     }
 
     @Override
     public int deleteTable(Long[] ids) {
+        for (Long id : ids) {
+            requireAccessibleTable(id);
+        }
         return baseMapper.deleteBatchIds(List.of(ids));
     }
 
     @Override
     public List<MetadataTableVo> listByDsId(Long dsId) {
+        datasourceHelper.getSysDatasource(dsId);
         return baseMapper.selectVoList(
             Wrappers.<MetadataTable>lambdaQuery()
                 .eq(MetadataTable::getDsId, dsId)
@@ -117,8 +136,13 @@ public class MetadataTableServiceImpl implements IMetadataTableService {
 
     @Override
     public List<String> listTagOptions() {
+        List<Long> accessibleDsIds = datasourceHelper.listAccessibleDatasourceIds();
+        if (accessibleDsIds.isEmpty()) {
+            return List.of();
+        }
         return extractTagOptions(baseMapper.selectList(
                 Wrappers.<MetadataTable>lambdaQuery()
+                    .in(MetadataTable::getDsId, accessibleDsIds)
                     .select(MetadataTable::getTags)
                     .isNotNull(MetadataTable::getTags)
                     .ne(MetadataTable::getTags, "")
@@ -157,11 +181,13 @@ public class MetadataTableServiceImpl implements IMetadataTableService {
 
     @Override
     public MetadataTable getByDsIdAndTableName(Long dsId, String tableName) {
-        return baseMapper.selectByTenantDsIdAndTableName(normalizeTenantId(TenantHelper.getTenantId()), dsId, tableName);
+        String tenantId = normalizeTenantId(datasourceHelper.getSysDatasource(dsId).getTenantId());
+        return baseMapper.selectByTenantDsIdAndTableName(tenantId, dsId, tableName);
     }
 
     @Override
     public int updateAlias(Long id, String alias) {
+        requireAccessibleTable(id);
         MetadataTable table = new MetadataTable(id);
         table.setTableAlias(alias);
         return baseMapper.updateById(table);
@@ -169,9 +195,31 @@ public class MetadataTableServiceImpl implements IMetadataTableService {
 
     @Override
     public int updateStatus(Long id, String status) {
+        requireAccessibleTable(id);
         MetadataTable table = new MetadataTable(id);
         table.setStatus(status);
         return baseMapper.updateById(table);
+    }
+
+    private void applyAccessibleDatasourceFilter(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<MetadataTable> wrapper, Long dsId) {
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(dsId);
+        if (accessibleDsIds.isEmpty()) {
+            wrapper.eq(MetadataTable::getId, -1L);
+            return;
+        }
+        wrapper.in(MetadataTable::getDsId, accessibleDsIds);
+    }
+
+    private MetadataTable requireAccessibleTable(Long id) {
+        if (id == null) {
+            throw new ServiceException("表ID不能为空");
+        }
+        MetadataTable table = baseMapper.selectById(id);
+        if (table == null) {
+            throw new ServiceException("元数据表不存在: " + id);
+        }
+        datasourceHelper.getSysDatasource(table.getDsId());
+        return table;
     }
 
     private String normalizeTenantId(String tenantId) {

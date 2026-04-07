@@ -20,12 +20,15 @@ import org.dromara.metadata.mapper.MetadataScanLogMapper;
 import org.dromara.metadata.service.IMetadataColumnService;
 import org.dromara.metadata.service.IMetadataScanService;
 import org.dromara.metadata.service.IMetadataTableService;
+import org.dromara.metadata.service.ISecColumnSensitivityService;
+import org.dromara.metadata.service.IGovLineageService;
+import org.dromara.metadata.service.IDqcPlanService;
+import org.dromara.metadata.service.ISecMaskStrategyService;
+import org.dromara.metadata.support.DatasourceHelper;
+import org.dromara.metadata.support.MetadataLayerResolver;
 import org.dromara.metadata.support.MetadataScanRuleMatcher;
-import org.dromara.datasource.support.DatasourceCryptoSupport;
 import org.dromara.datasource.adapter.DataSourceAdapter;
-import org.dromara.datasource.adapter.DataSourceAdapterRegistry;
 import org.dromara.datasource.domain.SysDatasource;
-import org.dromara.datasource.mapper.SysDatasourceMapper;
 import org.springframework.stereotype.Service;
 
 import java.sql.Timestamp;
@@ -46,31 +49,24 @@ public class MetadataScanServiceImpl implements IMetadataScanService {
 
     static final String DEFAULT_TENANT_ID = "000000";
 
-    private final SysDatasourceMapper sysDatasourceMapper;
     private final MetadataScanLogMapper scanLogMapper;
-    private final DataSourceAdapterRegistry adapterRegistry;
-    private final DatasourceCryptoSupport cryptoSupport;
     private final IMetadataTableService tableService;
     private final IMetadataColumnService columnService;
+    private final DatasourceHelper datasourceHelper;
+    private final ISecColumnSensitivityService sensitivityService;
+    private final IGovLineageService lineageService;
+    private final IDqcPlanService dqcPlanService;
+    private final ISecMaskStrategyService maskStrategyService;
+    private final MetadataLayerResolver layerResolver;
 
     @Override
     public MetadataScanResultVo scanByDatasource(MetadataScanBo bo, String tenantId) {
         Long dsId = bo.getDsId();
         // 1. 验证数据源
-        SysDatasource ds = sysDatasourceMapper.selectById(dsId);
-        if (ds == null) {
-            throw new ServiceException("数据源不存在: " + dsId);
-        }
+        SysDatasource ds = datasourceHelper.getSysDatasource(dsId);
 
-        // 2. 解密密码
-        String password = cryptoSupport.decryptPassword(ds.getPassword());
-
-        // 3. 获取适配器（不存在则创建）
-        DataSourceAdapter adapter = adapterRegistry.getOrCreateAdapter(
-            ds.getDsId(), ds.getDsType(), ds.getHost(), ds.getPort(),
-            ds.getDatabaseName(), ds.getSchemaName(), ds.getUsername(), password,
-            ds.getConnectionParams()
-        );
+        // 2. 获取适配器（不存在则创建）
+        DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
 
         // 4. 创建扫描记录
         MetadataScanLog scanLog = new MetadataScanLog();
@@ -123,7 +119,21 @@ public class MetadataScanServiceImpl implements IMetadataScanService {
                     tableRecord.setTableName(tableName);
                     tableRecord.setTableComment(tableComment);
                     tableRecord.setTableType("TABLE");
-                    tableRecord.setDataLayer(ds.getDataLayer());
+                    // 优先使用扫描时指定的数据层，否则尝试自动推断
+                    if (StringUtils.isNotBlank(bo.getDataLayer())) {
+                        tableRecord.setDataLayer(bo.getDataLayer());
+                    } else if (StringUtils.isNotBlank(ds.getDataLayer())) {
+                        tableRecord.setDataLayer(ds.getDataLayer());
+                    } else {
+                        var layerMatch = layerResolver.resolve(tableName, schemaName, null);
+                        if (layerMatch != null && layerMatch.confidence() > 0.6) {
+                            tableRecord.setDataLayer(layerMatch.layerCode());
+                            log.info("自动识别数仓分层: dsId={}, table={}, layer={}, confidence={}",
+                                ds.getDsId(), tableName, layerMatch.layerCode(), String.format("%.2f", layerMatch.confidence()));
+                        } else {
+                            tableRecord.setDataLayer(ds.getDataLayer());
+                        }
+                    }
                     tableRecord.setRowCount(rowCount);
                     tableRecord.setStatus("ACTIVE");
                     tableRecord.setLastScanTime(LocalDateTime.now());
@@ -201,6 +211,11 @@ public class MetadataScanServiceImpl implements IMetadataScanService {
             result.setEndTime(endTime);
             result.setErrors(errors);
 
+            // 9. 下游处理链（可选）
+            if (Boolean.TRUE.equals(bo.getAutoDownstreamProcess())) {
+                triggerDownstreamChain(ds.getDsId(), tablesToScan, scanLog);
+            }
+
             return result;
 
         } catch (Exception e) {
@@ -239,15 +254,28 @@ public class MetadataScanServiceImpl implements IMetadataScanService {
 
     @Override
     public List<MetadataScanLogVo> listScanLogs(Long dsId) {
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(dsId);
+        if (accessibleDsIds.isEmpty()) {
+            return List.of();
+        }
         var wrapper = Wrappers.<MetadataScanLog>lambdaQuery()
-            .eq(ObjectUtil.isNotNull(dsId), MetadataScanLog::getDsId, dsId)
+            .in(MetadataScanLog::getDsId, accessibleDsIds)
             .orderByDesc(MetadataScanLog::getStartTime);
         return scanLogMapper.selectVoList(wrapper);
     }
 
     @Override
     public MetadataScanLogVo getScanLog(Long id) {
-        return scanLogMapper.selectVoById(id);
+        MetadataScanLogVo scanLog = scanLogMapper.selectVoById(id);
+        if (scanLog == null) {
+            return null;
+        }
+        // 权限校验：用户必须有权限访问该数据源的扫描记录
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(scanLog.getDsId());
+        if (accessibleDsIds.isEmpty()) {
+            throw new org.dromara.common.core.exception.ServiceException("无权访问该数据源的扫描记录");
+        }
+        return scanLog;
     }
 
     private String buildScanRemark(MetadataScanBo bo) {
@@ -325,5 +353,60 @@ public class MetadataScanServiceImpl implements IMetadataScanService {
         } catch (Exception ignored) {
             return null;
         }
+    }
+
+    /**
+     * 触发下游处理链：敏感识别、血缘发现、DQC绑定、脱敏应用
+     *
+     * @param dsId     数据源ID
+     * @param tables   扫描的表名列表
+     * @param scanLog  扫描日志（用于回写统计）
+     */
+    private void triggerDownstreamChain(Long dsId, List<String> tables, MetadataScanLog scanLog) {
+        int sensitiveMatched = 0, lineageDiscovered = 0, dqcBinded = 0, maskApplied = 0;
+
+        for (String tableName : tables) {
+            try {
+                // ① 敏感字段识别
+                try {
+                    sensitivityService.scanColumns(dsId);
+                } catch (Exception e) {
+                    log.warn("敏感字段识别失败: dsId={}, table={}, error={}", dsId, tableName, e.getMessage());
+                }
+
+                // ② 血缘自动发现
+                try {
+                    lineageDiscovered += lineageService.autoDiscover(dsId, tableName);
+                } catch (Exception e) {
+                    log.warn("血缘自动发现失败: dsId={}, table={}, error={}", dsId, tableName, e.getMessage());
+                }
+
+                // ③ DQC默认方案绑定
+                try {
+                    dqcBinded += dqcPlanService.associateDefaultPlan(dsId, tableName);
+                } catch (Exception e) {
+                    log.warn("DQC方案绑定失败: dsId={}, table={}, error={}", dsId, tableName, e.getMessage());
+                }
+
+                // ④ 脱敏策略自动应用
+                try {
+                    maskApplied += maskStrategyService.autoApply(dsId, tableName);
+                } catch (Exception e) {
+                    log.warn("脱敏策略应用失败: dsId={}, table={}, error={}", dsId, tableName, e.getMessage());
+                }
+            } catch (Exception e) {
+                log.error("下游处理链异常: dsId={}, table={}", dsId, tableName, e);
+            }
+        }
+
+        // 更新扫描日志中的下游处理统计
+        scanLog.setSensitiveMatched(sensitiveMatched);
+        scanLog.setLineageDiscovered(lineageDiscovered);
+        scanLog.setDqcBinded(dqcBinded);
+        scanLog.setMaskApplied(maskApplied);
+        scanLogMapper.updateById(scanLog);
+
+        log.info("下游处理链完成: dsId={}, sensitiveMatched={}, lineageDiscovered={}, dqcBinded={}, maskApplied={}",
+            dsId, sensitiveMatched, lineageDiscovered, dqcBinded, maskApplied);
     }
 }

@@ -71,9 +71,19 @@ public class DqcPlan extends TenantEntity implements Serializable {
     private String alertOnFailure;
 
     /**
+     * 成功是否告警：1=告警
+     */
+    private String alertOnSuccess;
+
+    /**
      * 是否阻塞：1=阻塞
      */
     private String autoBlock;
+
+    /**
+     * 敏感等级（L1/L2/L3/L4）
+     */
+    private String sensitivityLevel;
 
     /**
      * 状态：DRAFT/PUBLISHED/DISABLED

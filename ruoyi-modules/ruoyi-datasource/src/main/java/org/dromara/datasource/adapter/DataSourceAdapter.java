@@ -2,6 +2,7 @@ package org.dromara.datasource.adapter;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * 数据源适配器接口
@@ -23,6 +24,12 @@ public interface DataSourceAdapter {
 
     /**
      * 执行查询（只读）
+     *
+     * ⚠️ 安全警告: 此方法直接执行传入的SQL字符串，存在SQL注入风险。
+     * 仅限内部使用（已知可信的SQL，如系统表查询）。外部调用者请使用
+     * {@link #executeQuery(String, Object...)} 参数化版本。
+     *
+     * @param sql 原始SQL（必须是可信的、不含用户输入的SQL）
      */
     List<Map<String, Object>> executeQuery(String sql);
 
@@ -32,7 +39,30 @@ public interface DataSourceAdapter {
     List<Map<String, Object>> executeQuery(String sql, Object... params);
 
     /**
+     * 执行可取消的查询（用于DQC规则执行，支持中途停止）
+     * @param sql SQL
+     * @param cancelChecker 执行过程中周期性调用的取消检查器，返回true表示应取消
+     */
+    List<Map<String, Object>> executeQueryCancellable(String sql, Supplier<Boolean> cancelChecker) throws java.sql.SQLException;
+
+    /**
+     * 执行可取消的查询（带参数，用于DQC规则执行，支持中途停止）
+     * @param sql SQL
+     * @param cancelChecker 执行过程中周期性调用的取消检查器，返回true表示应取消
+     * @param params 参数
+     */
+    default List<Map<String, Object>> executeQueryCancellable(String sql, Supplier<Boolean> cancelChecker, Object... params) {
+        return executeQuery(sql, params);
+    }
+
+    /**
      * 执行更新
+     *
+     * ⚠️ 安全警告: 此方法直接执行传入的SQL字符串，存在SQL注入风险。
+     * 仅限内部使用（已知可信的SQL）。外部调用者请使用
+     * {@link #executeUpdate(String, Object...)} 参数化版本。
+     *
+     * @param sql 原始SQL（必须是可信的、不含用户输入的SQL）
      */
     int executeUpdate(String sql);
 

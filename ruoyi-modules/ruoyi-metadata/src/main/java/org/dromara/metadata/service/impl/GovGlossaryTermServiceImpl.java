@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
@@ -66,7 +67,7 @@ public class GovGlossaryTermServiceImpl implements IGovGlossaryTermService {
     public int publish(Long id) {
         GovGlossaryTerm term = baseMapper.selectById(id);
         if (term == null) {
-            throw new IllegalArgumentException("术语不存在: " + id);
+            throw new ServiceException("术语不存在: " + id);
         }
         term.setStatus("PUBLISHED");
         return baseMapper.updateById(term);
@@ -79,11 +80,11 @@ public class GovGlossaryTermServiceImpl implements IGovGlossaryTermService {
         }
         return baseMapper.selectVoList(
             Wrappers.<GovGlossaryTerm>lambdaQuery()
-                .and(w -> w.like(GovGlossaryTerm::getTermName, keyword)
-                    .or()
-                    .like(GovGlossaryTerm::getTermAlias, keyword)
-                    .or()
-                    .like(GovGlossaryTerm::getTermDesc, keyword))
+                .like(GovGlossaryTerm::getTermName, keyword)
+                .or()
+                .like(GovGlossaryTerm::getTermAlias, keyword)
+                .or()
+                .like(GovGlossaryTerm::getTermDesc, keyword)
                 .eq(GovGlossaryTerm::getStatus, "PUBLISHED")
                 .orderByDesc(GovGlossaryTerm::getCreateTime)
         );
@@ -123,11 +124,12 @@ public class GovGlossaryTermServiceImpl implements IGovGlossaryTermService {
     private Wrapper<GovGlossaryTerm> buildQueryWrapper(GovGlossaryTermBo bo) {
         LambdaQueryWrapper<GovGlossaryTerm> wrapper = Wrappers.lambdaQuery();
         wrapper.like(StringUtils.isNotBlank(bo.getTermName()), GovGlossaryTerm::getTermName, bo.getTermName())
-            .like(StringUtils.isNotBlank(bo.getKeyword()), GovGlossaryTerm::getTermName, bo.getKeyword())
-            .or()
-            .like(StringUtils.isNotBlank(bo.getKeyword()), GovGlossaryTerm::getTermAlias, bo.getKeyword())
-            .or()
-            .like(StringUtils.isNotBlank(bo.getKeyword()), GovGlossaryTerm::getTermDesc, bo.getKeyword())
+            .and(StringUtils.isNotBlank(bo.getKeyword()), w -> w
+                .like(GovGlossaryTerm::getTermName, bo.getKeyword())
+                .or()
+                .like(GovGlossaryTerm::getTermAlias, bo.getKeyword())
+                .or()
+                .like(GovGlossaryTerm::getTermDesc, bo.getKeyword()))
             .eq(ObjectUtil.isNotNull(bo.getCategoryId()), GovGlossaryTerm::getCategoryId, bo.getCategoryId())
             .eq(StringUtils.isNotBlank(bo.getStatus()), GovGlossaryTerm::getStatus, bo.getStatus())
             .orderByDesc(GovGlossaryTerm::getCreateTime);

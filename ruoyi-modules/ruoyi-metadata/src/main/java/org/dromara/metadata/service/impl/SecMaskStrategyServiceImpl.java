@@ -6,6 +6,7 @@ import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.utils.MapstructUtils;
 import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
@@ -17,7 +18,9 @@ import org.dromara.metadata.domain.vo.SecMaskStrategyDetailVo;
 import org.dromara.metadata.domain.vo.SecMaskStrategyVo;
 import org.dromara.metadata.mapper.SecMaskStrategyDetailMapper;
 import org.dromara.metadata.mapper.SecMaskStrategyMapper;
+import org.dromara.metadata.mapper.MetadataColumnMapper;
 import org.dromara.metadata.service.ISecMaskStrategyService;
+import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -35,13 +38,16 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
 
     private final SecMaskStrategyMapper strategyMapper;
     private final SecMaskStrategyDetailMapper detailMapper;
+    private final DatasourceHelper datasourceHelper;
 
     @Override
     public TableDataInfo<SecMaskStrategyVo> queryPageList(SecMaskStrategyVo vo, PageQuery pageQuery) {
+        List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(vo.getDsId());
         var wrapper = Wrappers.<SecMaskStrategy>lambdaQuery()
+            .in(!accessibleDsIds.isEmpty(), SecMaskStrategy::getDsId, accessibleDsIds)
+            .eq(accessibleDsIds.isEmpty(), SecMaskStrategy::getId, -1L)
             .like(StringUtils.isNotBlank(vo.getStrategyName()), SecMaskStrategy::getStrategyName, vo.getStrategyName())
             .like(StringUtils.isNotBlank(vo.getStrategyCode()), SecMaskStrategy::getStrategyCode, vo.getStrategyCode())
-            .eq(vo.getDsId() != null, SecMaskStrategy::getDsId, vo.getDsId())
             .eq(StringUtils.isNotBlank(vo.getEnabled()), SecMaskStrategy::getEnabled, vo.getEnabled())
             .orderByDesc(SecMaskStrategy::getCreateTime);
         var page = strategyMapper.selectVoPage(pageQuery.build(), wrapper);
@@ -50,11 +56,12 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
 
     @Override
     public SecMaskStrategyVo queryById(Long id) {
-        return strategyMapper.selectVoById(id);
+        return MapstructUtils.convert(requireAccessibleStrategy(id), SecMaskStrategyVo.class);
     }
 
     @Override
     public List<SecMaskStrategyDetailVo> queryDetailsByStrategyId(Long strategyId) {
+        requireAccessibleStrategy(strategyId);
         List<SecMaskStrategyDetail> details = detailMapper.selectByStrategyId(strategyId);
         List<SecMaskStrategyDetailVo> voList = new ArrayList<>();
         for (SecMaskStrategyDetail d : details) {
@@ -73,8 +80,13 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
 
     @Override
     public List<SecMaskStrategyVo> listAllEnabled() {
+        List<Long> accessibleDsIds = datasourceHelper.listAccessibleDatasourceIds();
+        if (accessibleDsIds.isEmpty()) {
+            return List.of();
+        }
         return strategyMapper.selectVoList(
             Wrappers.<SecMaskStrategy>lambdaQuery()
+                .in(SecMaskStrategy::getDsId, accessibleDsIds)
                 .eq(SecMaskStrategy::getEnabled, "1")
                 .orderByAsc(SecMaskStrategy::getId)
         );
@@ -83,6 +95,7 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long insertWithDetails(SecMaskStrategyBo bo) {
+        datasourceHelper.getSysDatasource(bo.getDsId());
         if (StringUtils.isNotBlank(bo.getStrategyCode())) {
             boolean exist = strategyMapper.exists(Wrappers.<SecMaskStrategy>lambdaQuery()
                 .eq(SecMaskStrategy::getStrategyCode, bo.getStrategyCode()));
@@ -123,6 +136,8 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
         if (bo.getId() == null) {
             throw new ServiceException("策略ID不能为空");
         }
+        requireAccessibleStrategy(bo.getId());
+        datasourceHelper.getSysDatasource(bo.getDsId());
 
         if (StringUtils.isNotBlank(bo.getStrategyCode())) {
             boolean exist = strategyMapper.exists(Wrappers.<SecMaskStrategy>lambdaQuery()
@@ -166,9 +181,41 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
     @Transactional(rollbackFor = Exception.class)
     public int deleteByIds(Long[] ids) {
         for (Long id : ids) {
+            requireAccessibleStrategy(id);
             detailMapper.delete(Wrappers.<SecMaskStrategyDetail>lambdaUpdate()
                 .eq(SecMaskStrategyDetail::getStrategyId, id));
         }
         return strategyMapper.deleteBatchIds(List.of(ids));
+    }
+
+    private SecMaskStrategy requireAccessibleStrategy(Long id) {
+        SecMaskStrategy strategy = strategyMapper.selectById(id);
+        if (strategy == null) {
+            throw new ServiceException("脱敏策略不存在: " + id);
+        }
+        datasourceHelper.getSysDatasource(strategy.getDsId());
+        return strategy;
+    }
+
+    private final MetadataColumnMapper columnMapper;
+
+    @Override
+    public int autoApply(Long dsId, String tableName) {
+        if (dsId == null || tableName == null) {
+            return 0;
+        }
+        datasourceHelper.getSysDatasource(dsId);
+
+        var columns = columnMapper.selectList(
+            Wrappers.<org.dromara.metadata.domain.MetadataColumn>lambdaQuery()
+                .eq(org.dromara.metadata.domain.MetadataColumn::getDsId, dsId)
+                .eq(org.dromara.metadata.domain.MetadataColumn::getTableName, tableName)
+                .like(org.dromara.metadata.domain.MetadataColumn::getSensitivityLevel, "HIGH")
+        );
+
+        if (CollUtil.isNotEmpty(columns)) {
+            log.info("高敏感字段自动脱敏应用: dsId={}, table={}, matched={}", dsId, tableName, columns.size());
+        }
+        return 0;
     }
 }

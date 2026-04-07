@@ -8,6 +8,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.exception.ServiceException;
 import org.dromara.common.core.utils.StringUtils;
+import org.dromara.common.redis.utils.RedisUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.datasource.adapter.DataSourceAdapter;
@@ -18,6 +19,9 @@ import org.dromara.metadata.domain.DqcPlanRule;
 import org.dromara.metadata.domain.DqcRuleDef;
 import org.dromara.metadata.domain.vo.DqcExecutionDetailVo;
 import org.dromara.metadata.domain.vo.DqcExecutionVo;
+import org.dromara.metadata.engine.executor.AbstractRuleExecutor;
+import org.dromara.metadata.engine.executor.CustomSqlExecutor;
+import org.dromara.metadata.engine.executor.CustomSqlSecuritySupport;
 import org.dromara.metadata.engine.executor.RuleExecutor;
 import org.dromara.metadata.engine.executor.RuleExecutorFactory;
 import org.dromara.metadata.mapper.DqcExecutionDetailMapper;
@@ -28,6 +32,8 @@ import org.dromara.metadata.mapper.DqcRuleDefMapper;
 import org.dromara.metadata.service.IDqcExecutionService;
 import org.dromara.metadata.service.IDqcQualityScoreService;
 import org.dromara.metadata.support.DatasourceHelper;
+import org.redisson.api.RLock;
+import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,11 +42,17 @@ import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
-import java.util.concurrent.locks.ReentrantLock;
+import java.util.concurrent.TimeUnit;
+import java.util.function.Supplier;
 
 /**
  * 数据质量执行服务实现 - 核心DQC执行引擎
+ *
+ * <p>安全修复:
+ * <ul>
+ *   <li>S4: 内存锁替换为 Redis 分布式锁（进程重启不丢失，支持集群）</li>
+ *   <li>S3: 真正的查询中断 — stopExecution 设置取消标志位，规则执行循环周期性检查</li>
+ * </ul>
  */
 @Slf4j
 @RequiredArgsConstructor
@@ -56,8 +68,14 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
     private final RuleExecutorFactory executorFactory;
     private final IDqcQualityScoreService qualityScoreService;
 
-    /** 方案级别执行锁，防止同一方案重复执行 */
-    private final Map<Long, ReentrantLock> planLocks = new ConcurrentHashMap<>();
+    /** Redis 锁前缀：dqcexec:lock:{planId} */
+    private static final String LOCK_KEY_PREFIX = "dqcexec:lock:";
+    /** Redis 取消标志前缀：dqcexec:cancel:{executionId} */
+    private static final String CANCEL_KEY_PREFIX = "dqcexec:cancel:";
+    /** 锁等待超时（秒） */
+    private static final long LOCK_WAIT_SECONDS = 0;
+    /** 锁持有超时（秒），防止死锁。设置为10分钟，足够覆盖大多数DQC规则执行时间。 */
+    private static final long LOCK_LEASE_SECONDS = 600;
 
     @Override
     public TableDataInfo<DqcExecutionVo> queryPageList(DqcExecutionVo vo, PageQuery pageQuery) {
@@ -81,8 +99,8 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public DqcExecution executePlan(Long planId, String triggerType, Long triggerUser) {
-        // 方案级别加锁，防止重复执行
-        if (!tryLock(planId)) {
+        RLock lock = getLock(planId);
+        if (!tryLock(lock)) {
             throw new ServiceException("该方案正在执行中，请勿重复触发");
         }
 
@@ -90,7 +108,7 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         try {
             return doExecutePlan(planId, triggerType, triggerUser);
         } finally {
-            unlock(planId);
+            unlock(lock);
         }
     }
 
@@ -100,7 +118,7 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
     private DqcExecution doExecutePlan(Long planId, String triggerType, Long triggerUser) {
         DqcPlan plan = planMapper.selectById(planId);
         if (plan == null) {
-            throw new IllegalArgumentException("方案不存在: " + planId);
+            throw new ServiceException("方案不存在: " + planId);
         }
 
         // 创建执行记录
@@ -114,6 +132,10 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         execution.setStartTime(LocalDateTime.now());
         execution.setStatus("RUNNING");
         executionMapper.insert(execution);
+
+        // 设置取消标志位（用于 stopExecution 停止）
+        String cancelKey = CANCEL_KEY_PREFIX + execution.getId();
+        RedisUtils.setCacheObject(cancelKey, "0", Duration.ofHours(1));
 
         // 查询绑定规则
         var planRules = planRuleMapper.selectList(
@@ -141,15 +163,19 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         execution.setTotalRules(rules.size());
 
         int passed = 0, failed = 0, blocked = 0;
+        Long execId = execution.getId();
 
         for (DqcRuleDef rule : rules) {
+            // 每次规则执行前检查是否被取消
+            if (isCancelled(execId)) {
+                log.info("执行已被取消: executionId={}, ruleId={}", execId, rule.getId());
+                break;
+            }
+
             DqcExecutionDetail detail = createExecutionDetail(execution, rule);
 
             try {
-                // 获取数据源适配器
                 DataSourceAdapter adapter = datasourceHelper.getAdapter(rule.getTargetDsId());
-
-                // 使用执行器工厂获取执行器
                 RuleExecutor executor = executorFactory.getExecutor(rule.getRuleType());
                 if (executor == null) {
                     log.warn("未找到规则类型的执行器: ruleType={}, ruleId={}", rule.getRuleType(), rule.getId());
@@ -158,9 +184,11 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
                     detail.setErrorMsg("未找到规则类型的执行器: " + rule.getRuleType());
                     failed++;
                 } else {
-                    // 执行规则检查
-                    executor.execute(rule, detail, adapter);
-
+                    // 重置取消计数器并执行（传入取消检查器）
+                    if (executor instanceof AbstractRuleExecutor abstractExecutor) {
+                        abstractExecutor.resetCancelCounter();
+                    }
+                    executor.execute(rule, detail, adapter, () -> isCancelled(execId));
                     if ("1".equals(detail.getPassFlag())) {
                         passed++;
                     } else {
@@ -170,7 +198,6 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
                         }
                     }
                 }
-
             } catch (Exception e) {
                 log.error("规则 {} 执行失败: {}", rule.getRuleName(), e.getMessage());
                 detail.setPassFlag("0");
@@ -185,13 +212,16 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
             detailMapper.insert(detail);
         }
 
-        // 计算总分
+        // 清理取消标志位
+        RedisUtils.deleteObject(cancelKey);
+
         BigDecimal score = rules.isEmpty() ? BigDecimal.valueOf(100)
             : BigDecimal.valueOf(passed * 100.0 / rules.size());
 
-        // 确定最终状态
         String finalStatus;
-        if (failed == 0) {
+        if (isCancelled(execution.getId())) {
+            finalStatus = "STOPPED";
+        } else if (failed == 0) {
             finalStatus = "SUCCESS";
         } else if (passed == 0) {
             finalStatus = "FAILED";
@@ -199,7 +229,6 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
             finalStatus = "PARTIAL";
         }
 
-        // 更新执行记录
         execution.setPassedCount(passed);
         execution.setFailedCount(failed);
         execution.setBlockedCount(blocked);
@@ -209,18 +238,15 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         execution.setStatus(finalStatus);
         executionMapper.updateById(execution);
 
-        // 更新方案信息
         plan.setLastExecutionId(execution.getId());
         plan.setLastScore(score);
         plan.setLastExecutionTime(execution.getEndTime());
         planMapper.updateById(plan);
 
-        // 计算并保存质量评分
         try {
             qualityScoreService.calculateAndSaveScore(execution.getId());
         } catch (Exception e) {
             log.error("计算质量评分失败: executionId={}, error={}", execution.getId(), e.getMessage());
-            // 评分计算失败不影响执行结果
         }
 
         return execution;
@@ -246,11 +272,13 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
 
     @Override
     public List<DqcExecutionDetailVo> listDetailsByExecutionId(Long executionId) {
-        return detailMapper.selectVoList(
+        List<DqcExecutionDetailVo> details = detailMapper.selectVoList(
             Wrappers.<DqcExecutionDetail>lambdaQuery()
                 .eq(DqcExecutionDetail::getExecutionId, executionId)
                 .orderByAsc(DqcExecutionDetail::getId)
         );
+        sanitizeCustomSqlDetails(details);
+        return details;
     }
 
     @Override
@@ -263,20 +291,40 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
     }
 
     /**
-     * 尝试获取方案执行锁
+     * 获取 Redis 分布式锁
      */
-    private boolean tryLock(Long planId) {
-        return planLocks.computeIfAbsent(planId, k -> new ReentrantLock()).tryLock();
+    private RLock getLock(Long planId) {
+        return RedisUtils.getClient().getLock(LOCK_KEY_PREFIX + planId);
     }
 
     /**
-     * 释放方案执行锁
+     * 尝试获取分布式锁
      */
-    private void unlock(Long planId) {
-        ReentrantLock lock = planLocks.get(planId);
+    private boolean tryLock(RLock lock) {
+        try {
+            return lock.tryLock(LOCK_WAIT_SECONDS, LOCK_LEASE_SECONDS, TimeUnit.SECONDS);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+            throw new ServiceException("获取执行锁被中断");
+        }
+    }
+
+    /**
+     * 释放分布式锁
+     */
+    private void unlock(RLock lock) {
         if (lock != null && lock.isHeldByCurrentThread()) {
             lock.unlock();
         }
+    }
+
+    /**
+     * 检查执行是否已被取消
+     */
+    private boolean isCancelled(Long executionId) {
+        String cancelKey = CANCEL_KEY_PREFIX + executionId;
+        String value = RedisUtils.getCacheObject(cancelKey);
+        return "1".equals(value);
     }
 
     @Override
@@ -290,13 +338,17 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
             throw new ServiceException("只有运行中的执行才能停止");
         }
 
+        // 设置取消标志位，doExecutePlan 的规则循环会周期性检查此标志
+        String cancelKey = CANCEL_KEY_PREFIX + executionId;
+        RedisUtils.setCacheObject(cancelKey, "1", Duration.ofHours(1));
+
         // 标记执行为停止状态
         execution.setStatus("STOPPED");
         execution.setEndTime(LocalDateTime.now());
         execution.setElapsedMs(Duration.between(execution.getStartTime(), execution.getEndTime()).toMillis());
         executionMapper.updateById(execution);
 
-        log.info("执行记录已停止: executionId={}", executionId);
+        log.info("执行已标记停止，等待规则循环退出: executionId={}", executionId);
     }
 
     @Override
@@ -310,15 +362,15 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
             throw new ServiceException("无法重新执行：原执行记录没有关联方案");
         }
 
-        // 方案级别加锁
-        if (!tryLock(oldExecution.getPlanId())) {
+        RLock lock = getLock(oldExecution.getPlanId());
+        if (!tryLock(lock)) {
             throw new ServiceException("该方案正在执行中，请勿重复触发");
         }
 
         try {
             return doExecutePlan(oldExecution.getPlanId(), "MANUAL", triggerUser);
         } finally {
-            unlock(oldExecution.getPlanId());
+            unlock(lock);
         }
     }
 
@@ -335,6 +387,8 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
             vo.setStatusText("失败");
         } else if ("PARTIAL".equals(vo.getStatus())) {
             vo.setStatusText("部分成功");
+        } else if ("STOPPED".equals(vo.getStatus())) {
+            vo.setStatusText("已停止");
         }
     }
 
@@ -349,5 +403,18 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
             .eq(StringUtils.isNotBlank(vo.getTriggerType()), DqcExecution::getTriggerType, vo.getTriggerType())
             .orderByDesc(DqcExecution::getCreateTime);
         return wrapper;
+    }
+
+    private void sanitizeCustomSqlDetails(List<DqcExecutionDetailVo> details) {
+        for (DqcExecutionDetailVo detail : details) {
+            if (!CustomSqlExecutor.TYPE.equalsIgnoreCase(detail.getRuleType())) {
+                continue;
+            }
+            detail.setExecuteSql(CustomSqlSecuritySupport.REDACTED_SQL);
+            detail.setActualValue(null);
+            if (StringUtils.isNotBlank(detail.getErrorMsg())) {
+                detail.setErrorMsg(CustomSqlSecuritySupport.EXECUTION_ERROR);
+            }
+        }
     }
 }

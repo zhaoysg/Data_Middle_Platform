@@ -54,9 +54,11 @@
     "unplugin-vue-components": "catalog:",
     "vue": "catalog:",
     "vue-router": "catalog:",
-    "vue3-colorpicker": "catalog:"
+    "vue3-colorpicker": "catalog:",
+    "d3": "^7.9.0"
   },
   "devDependencies": {
-    "@types/lodash-es": "catalog:"
+    "@types/lodash-es": "catalog:",
+    "@types/d3": "^7.4.3"
   }
 }

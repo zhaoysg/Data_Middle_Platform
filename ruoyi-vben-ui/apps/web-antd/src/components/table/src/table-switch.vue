@@ -119,16 +119,26 @@ async function handleChange(checked: CheckedType, e: Event) {
 }
 </script>
 
+<style scoped>
+.table-switch-wrapper {
+  display: inline-block;
+  position: relative;
+  z-index: 9999;
+}
+</style>
+
 <template>
-  <Switch
-    v-bind="$attrs"
-    :loading="loading"
-    :disabled="disabled"
-    :checked="currentChecked"
-    :checked-children="checkedTextComputed"
-    :checked-value="checkedValue"
-    :un-checked-children="unCheckedTextComputed"
-    :un-checked-value="unCheckedValue"
-    @change="handleChange"
-  />
+  <div class="table-switch-wrapper">
+    <Switch
+      v-bind="$attrs"
+      :loading="loading"
+      :disabled="disabled"
+      :checked="currentChecked"
+      :checked-children="checkedTextComputed"
+      :checked-value="checkedValue"
+      :un-checked-children="unCheckedTextComputed"
+      :un-checked-value="unCheckedValue"
+      @change="handleChange"
+    />
+  </div>
 </template>

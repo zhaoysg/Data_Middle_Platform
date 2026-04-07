@@ -148,4 +148,13 @@ public class SysDatasourceController extends BaseController {
             @RequestParam(required = false) String schema) {
         return R.ok(datasourceService.getTableColumns(dsId, tableName, schema));
     }
+
+    /**
+     * 获取数据源的 Schema 列表（PostgreSQL 专用）
+     */
+    @SaCheckPermission("system:ds:query")
+    @GetMapping("/{dsId}/schemas")
+    public R<List<String>> schemas(@PathVariable Long dsId) {
+        return R.ok(datasourceService.getSchemas(dsId));
+    }
 }

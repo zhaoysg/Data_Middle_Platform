@@ -40,4 +40,24 @@ public class MetadataScanLog extends TenantEntity implements Serializable {
     private Long elapsedMs;
     private Long scanUserId;
     private String remark;
+
+    /**
+     * 下游处理：敏感识别匹配数
+     */
+    private Integer sensitiveMatched;
+
+    /**
+     * 下游处理：血缘关系发现数
+     */
+    private Integer lineageDiscovered;
+
+    /**
+     * 下游处理：DQC绑定数
+     */
+    private Integer dqcBinded;
+
+    /**
+     * 下游处理：脱敏应用数
+     */
+    private Integer maskApplied;
 }

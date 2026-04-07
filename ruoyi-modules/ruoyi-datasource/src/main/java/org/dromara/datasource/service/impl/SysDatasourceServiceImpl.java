@@ -96,7 +96,7 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         if (datasource == null) {
             throw new ServiceException("数据源不存在或无权限访问");
         }
-        datasource.setPassword(cryptoSupport.decryptPassword(datasource.getPassword()));
+        datasource.setPassword(null);
         return datasource;
     }
 
@@ -134,11 +134,12 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         if (!DataPermissionHelper.ignore(() -> checkDsCodeUnique(bo))) {
             throw new ServiceException("数据源编码已存在");
         }
-        getDatasourceOrThrow(bo.getDsId(), false);
+        SysDatasource existing = getDatasourceOrThrow(bo.getDsId(), false);
         // 如果数据源已注册，需要先注销旧的连接池
         if (dataSourceManager.isRegistered(bo.getDsId())) {
             adapterRegistry.unregisterAdapter(bo.getDsId());
         }
+        preserveStoredPasswordIfNecessary(bo, existing);
         encryptSensitiveFields(bo);
         SysDatasource ds = MapstructUtils.convert(bo, SysDatasource.class);
         return baseMapper.updateById(ds);
@@ -159,6 +160,9 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
     }
 
     @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
     public ConnectionTestResultVO testConnection(SysDatasourceBo bo) {
         long start = System.currentTimeMillis();
         try {
@@ -343,6 +347,23 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         return adapter.getColumns(tableName);
     }
 
+    @Override
+    @DataPermission({
+        @DataColumn(key = "deptName", value = "dept_id")
+    })
+    public List<String> getSchemas(Long dsId) {
+        SysDatasource ds = getDatasourceOrThrow(dsId, true);
+        ds.setPassword(cryptoSupport.decryptPassword(ds.getPassword()));
+        DataSourceAdapter adapter = adapterRegistry.getOrCreateAdapter(
+            dsId, ds.getDsType(),
+            ds.getHost(), ds.getPort(),
+            ds.getDatabaseName(), ds.getSchemaName(),
+            ds.getUsername(), ds.getPassword(),
+            ds.getConnectionParams()
+        );
+        return adapter.getSchemas();
+    }
+
     /**
      * 校验数据源编码唯一性
      */
@@ -389,6 +410,12 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
         }
     }
 
+    private void preserveStoredPasswordIfNecessary(SysDatasourceBo bo, SysDatasource existing) {
+        if (existing != null && StringUtils.isBlank(bo.getPassword())) {
+            bo.setPassword(existing.getPassword());
+        }
+    }
+
     private void prepareTestConnectionBo(SysDatasourceBo bo) {
         if (bo.getDsId() == null) {
             if (cryptoSupport.isEncrypted(bo.getPassword())) {
@@ -397,32 +424,43 @@ public class SysDatasourceServiceImpl implements ISysDatasourceService {
             return;
         }
         SysDatasource ds = getDatasourceOrThrow(bo.getDsId(), false);
-        if (StringUtils.isBlank(bo.getDsType())) {
-            bo.setDsType(ds.getDsType());
-        }
-        if (StringUtils.isBlank(bo.getHost())) {
-            bo.setHost(ds.getHost());
-        }
-        if (bo.getPort() == null) {
-            bo.setPort(ds.getPort());
-        }
-        if (StringUtils.isBlank(bo.getDatabaseName())) {
-            bo.setDatabaseName(ds.getDatabaseName());
-        }
-        if (StringUtils.isBlank(bo.getSchemaName())) {
-            bo.setSchemaName(ds.getSchemaName());
-        }
-        if (StringUtils.isBlank(bo.getUsername())) {
-            bo.setUsername(ds.getUsername());
-        }
+        String resolvedType = StringUtils.blankToDefault(StringUtils.trim(bo.getDsType()), ds.getDsType());
+        String resolvedHost = StringUtils.blankToDefault(StringUtils.trim(bo.getHost()), ds.getHost());
+        Integer resolvedPort = bo.getPort() != null ? bo.getPort() : ds.getPort();
+        String resolvedDatabaseName = StringUtils.blankToDefault(StringUtils.trim(bo.getDatabaseName()), ds.getDatabaseName());
+        String resolvedSchemaName = StringUtils.blankToDefault(StringUtils.trim(bo.getSchemaName()), ds.getSchemaName());
+        String resolvedUsername = StringUtils.blankToDefault(StringUtils.trim(bo.getUsername()), ds.getUsername());
+        String resolvedConnectionParams = StringUtils.blankToDefault(StringUtils.trim(bo.getConnectionParams()), ds.getConnectionParams());
+
+        bo.setDsType(resolvedType);
+        bo.setHost(resolvedHost);
+        bo.setPort(resolvedPort);
+        bo.setDatabaseName(resolvedDatabaseName);
+        bo.setSchemaName(resolvedSchemaName);
+        bo.setUsername(resolvedUsername);
+        bo.setConnectionParams(resolvedConnectionParams);
+
         if (StringUtils.isBlank(bo.getPassword())) {
+            if (!isStoredConnectionTarget(ds, resolvedType, resolvedHost, resolvedPort,
+                resolvedDatabaseName, resolvedSchemaName, resolvedUsername, resolvedConnectionParams)) {
+                throw new ServiceException("修改连接目标或账号时必须显式提供密码，不能复用已保存的数据源密码");
+            }
             bo.setPassword(cryptoSupport.decryptPassword(ds.getPassword()));
         } else if (cryptoSupport.isEncrypted(bo.getPassword())) {
             bo.setPassword(cryptoSupport.decryptPassword(bo.getPassword()));
         }
-        if (StringUtils.isBlank(bo.getConnectionParams())) {
-            bo.setConnectionParams(ds.getConnectionParams());
-        }
+    }
+
+    private boolean isStoredConnectionTarget(SysDatasource ds, String dsType, String host, Integer port,
+                                             String databaseName, String schemaName,
+                                             String username, String connectionParams) {
+        return StringUtils.equalsIgnoreCase(StringUtils.trim(ds.getDsType()), StringUtils.trim(dsType))
+            && StringUtils.equals(StringUtils.trim(ds.getHost()), StringUtils.trim(host))
+            && ObjectUtil.equals(ds.getPort(), port)
+            && StringUtils.equals(StringUtils.trim(ds.getDatabaseName()), StringUtils.trim(databaseName))
+            && StringUtils.equals(StringUtils.trim(ds.getSchemaName()), StringUtils.trim(schemaName))
+            && StringUtils.equals(StringUtils.trim(ds.getUsername()), StringUtils.trim(username))
+            && StringUtils.equals(StringUtils.trim(ds.getConnectionParams()), StringUtils.trim(connectionParams));
     }
 
     private SysDatasource getDatasourceOrThrow(Long dsId, boolean requireEnabled) {
