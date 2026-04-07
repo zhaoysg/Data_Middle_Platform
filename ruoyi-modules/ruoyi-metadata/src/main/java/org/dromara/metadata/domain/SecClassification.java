@@ -45,6 +45,11 @@ public class SecClassification extends BaseEntity implements Serializable {
     private Integer sortOrder;
 
     /**
+     * 默认关联敏感等级编码（关联 sec_level.level_code）
+     */
+    private String defaultLevelCode;
+
+    /**
      * 是否启用：0否 1是
      */
     private String enabled;

@@ -54,18 +54,30 @@ public class DprofileServiceImpl implements IDprofileService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long analyzeTable(Long dsId, String tableName, String level) {
-        DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
+        return analyzeTable(dsId, tableName, level, Collections.emptySet());
+    }
 
-        // 1. Table-level stats
+    @Override
+    @Transactional(rollbackFor = Exception.class)
+    public Long analyzeTable(Long dsId, String tableName, String level,
+                             Set<String> targetColumns) {
         TableStats tableStats = getTableStats(dsId, tableName);
 
-        // 2. Save report
         DprofileReport report = new DprofileReport();
         report.setTaskId(null);
         report.setDsId(dsId);
         report.setTableName(tableName);
         report.setRowCount(tableStats.rowCount());
-        report.setColumnCount(tableStats.columnCount());
+
+        List<ColumnStats> columnStatsList = Collections.emptyList();
+
+        if ("DETAILED".equalsIgnoreCase(level) || "FULL".equalsIgnoreCase(level)) {
+            columnStatsList = getColumnStats(dsId, tableName, targetColumns);
+            report.setColumnCount(columnStatsList.size());
+        } else {
+            report.setColumnCount(tableStats.columnCount());
+        }
+
         report.setDataSizeBytes(tableStats.dataSizeBytes());
         report.setStorageComment(tableStats.tableComment());
         report.setLastModified(tableStats.lastModified() != null
@@ -74,45 +86,50 @@ public class DprofileServiceImpl implements IDprofileService {
 
         Map<String, Object> profileData = new HashMap<>();
         profileData.put("rowCount", tableStats.rowCount());
-        profileData.put("columnCount", tableStats.columnCount());
+        profileData.put("columnCount", report.getColumnCount());
         profileData.put("level", level);
+        if (targetColumns != null && !targetColumns.isEmpty()) {
+            profileData.put("targetColumns", targetColumns);
+        }
         report.setProfileData(JSON.toJSONString(profileData));
 
         reportMapper.insert(report);
         Long reportId = report.getId();
 
-        // 3. Column-level stats (only for DETAILED and FULL)
-        if ("DETAILED".equalsIgnoreCase(level) || "FULL".equalsIgnoreCase(level)) {
-            List<ColumnStats> columnStatsList = getColumnStats(dsId, tableName);
-            for (ColumnStats cs : columnStatsList) {
-                DprofileColumnReport col = new DprofileColumnReport();
-                col.setReportId(reportId);
-                col.setDsId(dsId);
-                col.setTableName(tableName);
-                col.setColumnName(cs.columnName());
-                col.setDataType(cs.dataType());
-                col.setColumnComment(cs.columnComment());
-                col.setNullable(cs.nullable() ? "Y" : "N");
-                col.setIsPrimaryKey(cs.primaryKey() ? "Y" : "N");
-                col.setTotalCount(tableStats.rowCount());
-                col.setNullCount(cs.nullCount());
-                col.setNullRate(BigDecimal.valueOf(cs.nullRate()));
-                col.setUniqueCount(cs.uniqueCount());
-                col.setUniqueRate(BigDecimal.valueOf(cs.uniqueRate()));
-                col.setSampleValues(JSON.toJSONString(cs.sampleValues()));
-                col.setTopValues(JSON.toJSONString(cs.topValues()));
-                columnReportMapper.insert(col);
-            }
+        for (ColumnStats cs : columnStatsList) {
+            DprofileColumnReport col = new DprofileColumnReport();
+            col.setReportId(reportId);
+            col.setDsId(dsId);
+            col.setTableName(tableName);
+            col.setColumnName(cs.columnName());
+            col.setDataType(cs.dataType());
+            col.setColumnComment(cs.columnComment());
+            col.setNullable(cs.nullable() ? "Y" : "N");
+            col.setIsPrimaryKey(cs.primaryKey() ? "Y" : "N");
+            col.setTotalCount(tableStats.rowCount());
+            col.setNullCount(cs.nullCount());
+            col.setNullRate(BigDecimal.valueOf(cs.nullRate()));
+            col.setUniqueCount(cs.uniqueCount());
+            col.setUniqueRate(BigDecimal.valueOf(cs.uniqueRate()));
+            col.setSampleValues(JSON.toJSONString(cs.sampleValues()));
+            col.setTopValues(JSON.toJSONString(cs.topValues()));
+            columnReportMapper.insert(col);
         }
 
-        log.info("表 {} 探查完成，报告ID: {}, 行数: {}, 列数: {}, 级别: {}",
-            tableName, reportId, tableStats.rowCount(), tableStats.columnCount(), level);
+        log.info("表 {} 探查完成，报告ID: {}, 行数: {}, 分析列数: {}, 级别: {}",
+            tableName, reportId, tableStats.rowCount(), columnStatsList.size(), level);
 
         return reportId;
     }
 
     @Override
     public List<Long> analyzeTables(Long dsId, List<String> tableNames, String level) {
+        return analyzeTables(dsId, tableNames, level, Collections.emptySet());
+    }
+
+    @Override
+    public List<Long> analyzeTables(Long dsId, List<String> tableNames, String level,
+                                    Set<String> targetColumns) {
         List<Long> reportIds = new ArrayList<>();
         int count = 0;
 
@@ -122,7 +139,7 @@ public class DprofileServiceImpl implements IDprofileService {
                 break;
             }
             try {
-                Long reportId = analyzeTable(dsId, table, level);
+                Long reportId = analyzeTable(dsId, table, level, targetColumns);
                 reportIds.add(reportId);
             } catch (Exception e) {
                 log.error("分析表 {} 失败: {}", table, e.getMessage(), e);
@@ -130,7 +147,9 @@ public class DprofileServiceImpl implements IDprofileService {
             count++;
         }
 
-        log.info("批量分析完成，共处理 {} 张表，成功 {} 张", count, reportIds.size());
+        log.info("批量分析完成，共处理 {} 张表，成功 {} 张，指定列数: {}",
+            count, reportIds.size(),
+            targetColumns == null || targetColumns.isEmpty() ? "全部" : targetColumns.size());
         return reportIds;
     }
 
@@ -141,7 +160,6 @@ public class DprofileServiceImpl implements IDprofileService {
         long rowCount = adapter.getRowCount(tableName);
         List<ColumnInfo> columns = adapter.getColumns(tableName);
 
-        // HARD-LIMIT: only analyze first MAX_COLUMNS columns
         if (columns.size() > MAX_COLUMNS) {
             log.warn("表 {} 列数 {} 超过限制 {}, 仅分析前 {} 列",
                 tableName, columns.size(), MAX_COLUMNS, MAX_COLUMNS);
@@ -163,10 +181,15 @@ public class DprofileServiceImpl implements IDprofileService {
 
     @Override
     public List<ColumnStats> getColumnStats(Long dsId, String tableName) {
+        return getColumnStats(dsId, tableName, Collections.emptySet());
+    }
+
+    @Override
+    public List<ColumnStats> getColumnStats(Long dsId, String tableName,
+                                             Set<String> targetColumns) {
         DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
         List<ColumnInfo> columns = adapter.getColumns(tableName);
 
-        // HARD-LIMIT: only analyze first MAX_COLUMNS columns
         if (columns.size() > MAX_COLUMNS) {
             columns = columns.subList(0, MAX_COLUMNS);
         }
@@ -175,6 +198,10 @@ public class DprofileServiceImpl implements IDprofileService {
 
         List<ColumnStats> result = new ArrayList<>();
         for (ColumnInfo col : columns) {
+            if (targetColumns != null && !targetColumns.isEmpty()
+                && !targetColumns.contains(col.columnName())) {
+                continue;
+            }
             try {
                 ColumnStats stats = analyzeColumn(jdbc, tableName, col);
                 result.add(stats);

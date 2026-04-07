@@ -24,7 +24,7 @@ const dimensionLabelMap: Record<string, string> = {
   UNIQUENESS: '唯一性',
   ACCURACY: '准确性',
   CONSISTENCY: '一致性',
-  TIMELINESS: '时效性',
+  TIMELINESS: '及时性',
   VALIDITY: '有效性',
   CUSTOM: '自定义',
 };
@@ -33,12 +33,14 @@ const errorLevelColorMap: Record<string, string> = {
   HIGH: 'red',
   MEDIUM: 'orange',
   LOW: 'green',
+  CRITICAL: 'purple',
 };
 
 const errorLevelLabelMap: Record<string, string> = {
   HIGH: '高',
   MEDIUM: '中',
   LOW: '低',
+  CRITICAL: '危急',
 };
 
 const formOptions: VbenFormProps = {
@@ -49,7 +51,7 @@ const formOptions: VbenFormProps = {
   schema: [
     { fieldName: 'ruleName', label: '规则名称', component: 'Input' },
     {
-      fieldName: 'dimension',
+      fieldName: 'dimensions',
       label: '质量维度',
       component: 'Select',
       componentProps: {
@@ -58,9 +60,8 @@ const formOptions: VbenFormProps = {
           { label: '唯一性', value: 'UNIQUENESS' },
           { label: '准确性', value: 'ACCURACY' },
           { label: '一致性', value: 'CONSISTENCY' },
-          { label: '时效性', value: 'TIMELINESS' },
+          { label: '及时性', value: 'TIMELINESS' },
           { label: '有效性', value: 'VALIDITY' },
-          { label: '自定义', value: 'CUSTOM' },
         ],
         allowClear: true,
       },
@@ -90,13 +91,25 @@ const gridOptions: VxeGridProps = {
     { title: '模板名称', field: 'templateName', width: 120 },
     {
       title: '质量维度',
-      field: 'dimension',
-      width: 100,
+      field: 'dimensions',
+      width: 140,
       formatter: ({ cellValue }: { cellValue?: string }) => {
-        return cellValue ? dimensionLabelMap[cellValue] || cellValue : '-';
+        if (!cellValue) return '-';
+        return cellValue
+          .split(',')
+          .map((s) => s.trim())
+          .filter(Boolean)
+          .map((code) => dimensionLabelMap[code] || code)
+          .join('、');
       },
     },
-    { title: '数据源', field: 'dsName', width: 120 },
+    {
+      title: '数据源',
+      field: 'targetDsName',
+      width: 120,
+      formatter: ({ row }: { row: DqcRuleDef }) =>
+        (row as any).targetDsName || (row as any).dsName || '-',
+    },
     { title: '目标表', field: 'targetTable', width: 150 },
     { title: '目标字段', field: 'targetColumn', width: 120 },
     {

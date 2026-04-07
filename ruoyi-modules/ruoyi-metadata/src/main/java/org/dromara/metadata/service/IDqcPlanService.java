@@ -3,7 +3,9 @@ package org.dromara.metadata.service;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.metadata.domain.DqcPlan;
+import org.dromara.metadata.domain.DqcPlanRule;
 import org.dromara.metadata.domain.bo.DqcPlanBo;
+import org.dromara.metadata.domain.bo.DqcPlanRuleBindBo;
 import org.dromara.metadata.domain.vo.DqcPlanVo;
 
 import java.util.List;

@@ -33,6 +33,7 @@ public class SecSensitivityRuleServiceImpl implements ISecSensitivityRuleService
             .eq(StringUtils.isNotBlank(vo.getRuleType()), SecSensitivityRule::getRuleType, vo.getRuleType())
             .eq(StringUtils.isNotBlank(vo.getTargetLevelCode()), SecSensitivityRule::getTargetLevelCode, vo.getTargetLevelCode())
             .eq(StringUtils.isNotBlank(vo.getTargetClassCode()), SecSensitivityRule::getTargetClassCode, vo.getTargetClassCode())
+            .eq(StringUtils.isNotBlank(vo.getBuiltin()), SecSensitivityRule::getBuiltin, vo.getBuiltin())
             .eq(StringUtils.isNotBlank(vo.getEnabled()), SecSensitivityRule::getEnabled, vo.getEnabled())
             .orderByDesc(SecSensitivityRule::getCreateTime);
         var page = baseMapper.selectVoPage(pageQuery.build(), wrapper);

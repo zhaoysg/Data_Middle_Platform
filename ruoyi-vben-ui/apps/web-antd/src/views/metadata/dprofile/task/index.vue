@@ -4,13 +4,19 @@ import type { VbenFormProps } from '@vben/common-ui';
 import type { VxeGridProps } from '#/adapter/vxe-table';
 import type { DprofileTask } from '#/api/metadata/model';
 
-import { PlusOutlined, PlayCircleOutlined, StopOutlined } from '@ant-design/icons-vue';
+import { h } from 'vue';
+
 import { Page, useVbenDrawer } from '@vben/common-ui';
+
+import {
+  PlayCircleOutlined,
+  PlusOutlined,
+  StopOutlined,
+} from '@ant-design/icons-vue';
 import { Button, Popconfirm, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  dprofileTaskAdd,
   dprofileTaskList,
   dprofileTaskRemove,
   dprofileTaskStart,
@@ -41,6 +47,12 @@ const triggerTypeLabelMap: Record<string, string> = {
   MANUAL: '手动',
   SCHEDULE: '定时',
   API: 'API调用',
+};
+
+const profileLevelLabelMap: Record<string, string> = {
+  BASIC: '仅表级',
+  DETAILED: '表+列级',
+  FULL: '完整探查',
 };
 
 const formOptions: VbenFormProps = {
@@ -76,7 +88,32 @@ const gridOptions: VxeGridProps = {
     { title: '任务名称', field: 'taskName', width: 200, fixed: 'left' },
     { title: '任务编码', field: 'taskCode', width: 150 },
     { title: '数据源', field: 'dsName', width: 150 },
-    { title: '探查级别', field: 'profileLevel', width: 100 },
+    {
+      title: '目标表/模式',
+      field: 'tablePattern',
+      width: 160,
+      showOverflow: 'tooltip',
+    },
+    {
+      title: '指定列',
+      field: 'targetColumns',
+      width: 120,
+      showOverflow: 'tooltip',
+      formatter: ({ cellValue }: { cellValue?: string }) => {
+        if (!cellValue) return '全部列';
+        const cols = (cellValue as string).split(',');
+        if (cols.length <= 2) return cols.join(', ');
+        return `${cols.slice(0, 2).join(', ')}…${cols.length}列`;
+      },
+    },
+    {
+      title: '探查级别',
+      field: 'profileLevel',
+      width: 100,
+      formatter: ({ cellValue }: { cellValue?: string }) => {
+        return cellValue ? profileLevelLabelMap[cellValue] || cellValue : '-';
+      },
+    },
     {
       title: '触发方式',
       field: 'triggerType',
@@ -92,8 +129,19 @@ const gridOptions: VxeGridProps = {
       width: 100,
       slots: { default: 'status' },
     },
-    { title: '状态', field: 'enabled', width: 80, slots: { default: 'enabled' } },
-    { title: '操作', field: 'action', width: 180, fixed: 'right', slots: { default: 'action' } },
+    {
+      title: '状态',
+      field: 'enabled',
+      width: 80,
+      slots: { default: 'enabled' },
+    },
+    {
+      title: '操作',
+      field: 'action',
+      width: 180,
+      fixed: 'right',
+      slots: { default: 'action' },
+    },
   ],
   height: 'auto',
   proxyConfig: {
@@ -115,7 +163,9 @@ const gridOptions: VxeGridProps = {
 };
 
 const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
-const [TaskDrawer, drawerApi] = useVbenDrawer({ connectedComponent: taskDrawer });
+const [TaskDrawer, drawerApi] = useVbenDrawer({
+  connectedComponent: taskDrawer,
+});
 
 function handleAdd() {
   drawerApi.setData({});
@@ -181,13 +231,21 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => dprofileTaskUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          :api="
+            () =>
+              dprofileTaskUpdate({
+                id: row.id,
+                enabled: row.enabled === '0' ? '1' : '0',
+              })
+          "
           @reload="tableApi.query()"
         />
       </template>
       <template #action="{ row }">
         <Space>
-          <a-button type="link" size="small" @click="handleEdit(row)">编辑</a-button>
+          <a-button type="link" size="small" @click="handleEdit(row)">
+            编辑
+          </a-button>
           <Button
             v-if="row.status !== 'RUNNING'"
             type="link"

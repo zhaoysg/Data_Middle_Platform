@@ -222,14 +222,14 @@ INSERT INTO sys_menu (menu_id, menu_name, parent_id, order_num, `path`, componen
 (24155, '分类导出', 2409, 5, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:classification:export', '#', 103, 1, NOW());
 
 -- ---------------------------------------------------------------
--- 4-7. 敏感等级 (2410) - metadata:level:*
+-- 4-7. 敏感等级 (2410) - metadata:security:level:*
 -- ---------------------------------------------------------------
 DELETE FROM sys_menu WHERE parent_id = 2410 AND menu_type = 'F';
 INSERT INTO sys_menu (menu_id, menu_name, parent_id, order_num, `path`, component, query_param, is_frame, is_cache, menu_type, visible, status, perms, icon, create_dept, create_by, create_time) VALUES
-(24161, '等级查询', 2410, 1, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:level:query',  '#', 103, 1, NOW()),
-(24162, '等级新增', 2410, 2, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:level:add',    '#', 103, 1, NOW()),
-(24163, '等级修改', 2410, 3, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:level:edit',   '#', 103, 1, NOW()),
-(24164, '等级删除', 2410, 4, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:level:remove', '#', 103, 1, NOW());
+(24161, '等级查询', 2410, 1, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:security:level:query',  '#', 103, 1, NOW()),
+(24162, '等级新增', 2410, 2, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:security:level:add',    '#', 103, 1, NOW()),
+(24163, '等级修改', 2410, 3, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:security:level:edit',   '#', 103, 1, NOW()),
+(24164, '等级删除', 2410, 4, '#', '', '', 1, 0, 'F', '0', '0', 'metadata:security:level:remove', '#', 103, 1, NOW());
 
 -- ---------------------------------------------------------------
 -- 4-8. 识别规则 (2411) - metadata:rules:*

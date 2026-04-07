@@ -88,6 +88,11 @@ public class SecMaskTemplateServiceImpl implements ISecMaskTemplateService {
         entity.setTemplateName(vo.getTemplateName());
         entity.setTemplateType(vo.getTemplateType());
         entity.setMaskExpr(vo.getMaskExpr());
+        entity.setMaskChar(vo.getMaskChar());
+        entity.setMaskPosition(vo.getMaskPosition());
+        entity.setMaskHeadKeep(vo.getMaskHeadKeep());
+        entity.setMaskTailKeep(vo.getMaskTailKeep());
+        entity.setMaskPattern(vo.getMaskPattern());
         entity.setTemplateDesc(vo.getTemplateDesc());
         entity.setBuiltin(vo.getBuiltin() != null ? vo.getBuiltin() : "0");
         entity.setEnabled(vo.getEnabled() != null ? vo.getEnabled() : "1");
@@ -114,6 +119,11 @@ public class SecMaskTemplateServiceImpl implements ISecMaskTemplateService {
         entity.setTemplateName(vo.getTemplateName());
         entity.setTemplateType(vo.getTemplateType());
         entity.setMaskExpr(vo.getMaskExpr());
+        entity.setMaskChar(vo.getMaskChar());
+        entity.setMaskPosition(vo.getMaskPosition());
+        entity.setMaskHeadKeep(vo.getMaskHeadKeep());
+        entity.setMaskTailKeep(vo.getMaskTailKeep());
+        entity.setMaskPattern(vo.getMaskPattern());
         entity.setTemplateDesc(vo.getTemplateDesc());
         entity.setBuiltin(vo.getBuiltin());
         entity.setEnabled(vo.getEnabled());

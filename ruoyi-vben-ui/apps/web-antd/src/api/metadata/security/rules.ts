@@ -20,12 +20,12 @@ export function secSensitivityRuleInfo(id: ID) {
 
 /** 新增敏感识别规则 */
 export function secSensitivityRuleAdd(data: Partial<SecSensitivityRule>) {
-  return requestClient.post<ID>(Api.root, data);
+  return requestClient.postWithMsg<ID>(Api.root, data);
 }
 
 /** 修改敏感识别规则 */
 export function secSensitivityRuleUpdate(data: Partial<SecSensitivityRule>) {
-  return requestClient.putWithMsg<void>(Api.root, data);
+  return requestClient.putWithMsg<ID>(Api.root, data);
 }
 
 /** 删除敏感识别规则 */

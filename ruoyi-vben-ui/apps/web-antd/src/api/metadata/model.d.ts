@@ -188,16 +188,27 @@ export interface DqcRuleDef {
   templateId?: number;
   templateName?: string;
   ruleType?: string;
-  dimension?: string;
+  /** 质量维度，多个英文逗号分隔 */
+  dimensions?: string;
+  applyLevel?: string;
+  ruleExpr?: string;
   targetDsId?: number;
+  targetDsName?: string;
   dsName?: string;
   targetTable?: string;
   targetColumn?: string;
-  ruleParams?: string; // JSON
-  errorLevel?: string; // HIGH/MEDIUM/LOW
-  ruleStrength?: string; // STRONG/WEAK
+  compareDsId?: number;
+  compareTable?: string;
+  compareColumn?: string;
+  thresholdMin?: number | string;
+  thresholdMax?: number | string;
+  fluctuationThreshold?: number | string;
+  regexPattern?: string;
+  errorLevel?: string;
+  ruleStrength?: string;
+  alertReceivers?: string;
+  sortOrder?: number;
   enabled?: string;
-  builtin?: string;
   createBy?: string;
   createTime?: string;
 }
@@ -345,6 +356,16 @@ export interface SecClassification {
   className?: string;
   classDesc?: string;
   sortOrder?: number;
+  /** 默认关联敏感等级编码（sec_level.level_code） */
+  defaultLevelCode?: string;
+  /** 等级名称（列表聚合展示） */
+  defaultLevelName?: string;
+  /** 等级颜色（列表 Tag） */
+  defaultLevelColor?: string;
+  /** 指向该分类的敏感识别规则数量 */
+  ruleCount?: number;
+  /** 该分类下敏感字段记录数量 */
+  fieldCount?: number;
   enabled?: string;
   createBy?: string;
   createTime?: string;
@@ -384,8 +405,15 @@ export interface SecMaskTemplate {
   id?: number;
   templateCode?: string;
   templateName?: string;
-  templateType?: string; // ENCRYPT/MASK/HIDE/DELETE/SHUFFLE/CUSTOM
+  /** 脱敏类型：与 bgdata maskType 对齐 NONE/MASK/HIDE/ENCRYPT/DELETE/HASH/FORMAT_KEEP/RANGE/WATERMARK/SHUFFLE/CUSTOM */
+  templateType?: string;
+  /** 执行层 SQL 片段（可选） */
   maskExpr?: string;
+  maskChar?: string;
+  maskPosition?: string;
+  maskHeadKeep?: number;
+  maskTailKeep?: number;
+  maskPattern?: string;
   templateDesc?: string;
   builtin?: string;
   enabled?: string;
@@ -476,6 +504,8 @@ export interface DprofileTask {
   dsName?: string;
   profileLevel?: string; // BASIC/DETAILED/FULL
   tablePattern?: string;
+  /** 指定探查的列名（逗号分隔，留空表示全部列） */
+  targetColumns?: string;
   triggerType?: string;
   cronExpr?: string;
   status?: string; // DRAFT/RUNNING/SUCCESS/FAILED/STOPPED

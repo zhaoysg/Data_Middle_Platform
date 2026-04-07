@@ -1,12 +1,12 @@
 <script setup lang="ts">
-import { computed, ref } from 'vue';
+import { ref } from 'vue';
 
 import type { VbenFormProps } from '@vben/common-ui';
 
 import type { VxeGridProps } from '#/adapter/vxe-table';
 import type { DqcRuleTemplate } from '#/api/metadata/model';
 
-import { PlusOutlined, ContainerOutlined, AppstoreOutlined, StopOutlined } from '@ant-design/icons-vue';
+import { PlusOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Badge, Descriptions, Modal, Popconfirm, Space } from 'ant-design-vue';
 
@@ -110,12 +110,12 @@ const gridOptions: VxeGridProps = {
   checkboxConfig: { highlight: true, reserve: true },
   columns: [
     { type: 'checkbox', width: 50, fixed: 'left' },
-    { title: '模板名称', field: 'templateName', width: 180, fixed: 'left' },
-    { title: '模板编码', field: 'templateCode', width: 150 },
+    { title: '模板名称', field: 'templateName', minWidth: 180, fixed: 'left' },
+    { title: '模板编码', field: 'templateCode', minWidth: 150 },
     {
       title: '质量维度',
       field: 'dimension',
-      width: 100,
+      minWidth: 100,
       formatter: ({ cellValue }: { cellValue?: string }) => {
         return cellValue ? dimensionLabelMap[cellValue] || cellValue : '-';
       },
@@ -123,7 +123,7 @@ const gridOptions: VxeGridProps = {
     {
       title: '规则类型',
       field: 'ruleType',
-      width: 120,
+      minWidth: 120,
       formatter: ({ cellValue }: { cellValue?: string }) => {
         return cellValue ? ruleTypeLabelMap[cellValue] || cellValue : '-';
       },
@@ -131,12 +131,12 @@ const gridOptions: VxeGridProps = {
     {
       title: '内置',
       field: 'builtin',
-      width: 80,
+      minWidth: 80,
       slots: { default: 'builtin' },
     },
-    { title: '状态', field: 'enabled', width: 80, slots: { default: 'enabled' } },
-    { title: '创建时间', field: 'createTime', width: 180 },
-    { title: '操作', field: 'action', width: 150, fixed: 'right', slots: { default: 'action' } },
+    { title: '状态', field: 'enabled', minWidth: 80, slots: { default: 'enabled' } },
+    { title: '创建时间', field: 'createTime', minWidth: 180 },
+    { title: '操作', field: 'action', minWidth: 150, fixed: 'right', slots: { default: 'action' } },
   ],
   height: 'auto',
   proxyConfig: {
@@ -157,21 +157,16 @@ const gridOptions: VxeGridProps = {
   id: 'dqc-template-index',
 };
 
-const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
+const [BasicTable, tableApi] = useVbenVxeGrid({
+  formOptions,
+  gridOptions,
+  gridClass: 'w-full',
+});
 const [TemplateDrawer, drawerApi] = useVbenDrawer({ connectedComponent: templateDrawer });
 
 const detailVisible = ref(false);
 const detailRecord = ref<Record<string, any>>({});
 const detailLoading = ref(false);
-
-const gridData = computed<DqcRuleTemplate[]>(() => {
-  try {
-    const data = tableApi.grid?.getData();
-    return Array.isArray(data) ? (data as DqcRuleTemplate[]) : [];
-  } catch {
-    return [];
-  }
-});
 
 async function loadDetail(id: number) {
   detailLoading.value = true;
@@ -215,99 +210,11 @@ async function handleMultiDelete() {
 </script>
 
 <template>
-  <Page :auto-content-height="true">
-    <!-- Page Title Area -->
-    <div class="flex items-center gap-3 mb-6">
-      <div
-        class="flex items-center justify-center w-10 h-10 rounded-lg bg-gradient-to-br from-blue-500 to-indigo-600 text-white shadow-md"
-      >
-        <svg
-          xmlns="http://www.w3.org/2000/svg"
-          viewBox="0 0 24 24"
-          fill="currentColor"
-          class="w-5 h-5"
-        >
-          <path
-            fill-rule="evenodd"
-            d="M2.25 4.125c0-1.036.84-1.875 1.875-1.875h16.5c1.036 0 1.875.84 1.875 1.875v15.75c0 1.036-.84 1.875-1.875 1.875H4.125A1.875 1.875 0 0 1 2.25 19.875V4.125Zm1.875 1.125c.621 0 1.125.504 1.125 1.125v13.5c0 .621-.504 1.125-1.125 1.125H4.125A1.125 1.125 0 0 1 3 19.875V6.375c0-.621.504-1.125 1.125-1.125h16.5Z"
-            clip-rule="evenodd"
-          />
-          <path
-            d="M11.25 9h1.5v2.25H11.25V9ZM8.625 9h1.5v2.25H8.625V9ZM6 9h1.5v2.25H6V9Zm2.625 4.5h1.5V15H8.625V13.5Zm4.125 0h1.5V15h-1.5V13.5Zm-3.375 0H9.75V15h1.125V13.5ZM14.625 9h1.5v2.25h-1.5V9Zm-1.125 4.5h1.5V15h-1.5V13.5Z"
-          />
-        </svg>
-      </div>
-      <div>
-        <h2 class="text-lg font-semibold text-gray-800 m-0 leading-tight">规则模板管理</h2>
-        <p class="text-sm text-gray-500 m-0">配置和管理数据质量规则模板</p>
-      </div>
-    </div>
-
-    <!-- Stat Cards -->
-    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
-      <div
-        class="bg-gradient-to-r from-blue-500 to-blue-600 rounded-xl p-5 text-white shadow-md hover:shadow-lg transition-shadow"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-blue-100 text-sm font-medium mb-1">模板总数</div>
-            <div class="text-2xl font-bold">
-              {{ gridData.length }}
-            </div>
-          </div>
-          <div class="opacity-80">
-            <ContainerOutlined class="text-3xl" />
-          </div>
-        </div>
-      </div>
-      <div
-        class="bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-xl p-5 text-white shadow-md hover:shadow-lg transition-shadow"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-emerald-100 text-sm font-medium mb-1">内置模板</div>
-            <div class="text-2xl font-bold">
-              {{ gridData.filter((r) => r.builtin === '1').length }}
-            </div>
-          </div>
-          <div class="opacity-80">
-            <AppstoreOutlined class="text-3xl" />
-          </div>
-        </div>
-      </div>
-      <div
-        class="bg-gradient-to-r from-purple-500 to-purple-600 rounded-xl p-5 text-white shadow-md hover:shadow-lg transition-shadow"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-purple-100 text-sm font-medium mb-1">自定义模板</div>
-            <div class="text-2xl font-bold">
-              {{ gridData.filter((r) => r.builtin === '0').length }}
-            </div>
-          </div>
-          <div class="opacity-80">
-            <AppstoreOutlined class="text-3xl" />
-          </div>
-        </div>
-      </div>
-      <div
-        class="bg-gradient-to-r from-gray-500 to-gray-600 rounded-xl p-5 text-white shadow-md hover:shadow-lg transition-shadow"
-      >
-        <div class="flex items-center justify-between">
-          <div>
-            <div class="text-gray-100 text-sm font-medium mb-1">停用模板</div>
-            <div class="text-2xl font-bold">
-              {{ gridData.filter((r) => r.enabled === '1').length }}
-            </div>
-          </div>
-          <div class="opacity-80">
-            <StopOutlined class="text-3xl" />
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <BasicTable table-title="规则模板">
+  <Page
+    :auto-content-height="true"
+    content-class="flex min-h-0 w-full flex-col"
+  >
+    <BasicTable class="min-h-0 flex-1 w-full overflow-hidden" table-title="规则模板">
       <template #toolbar-tools>
         <Space>
           <a-button type="primary" @click="handleAdd">

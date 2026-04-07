@@ -30,6 +30,16 @@ public class SecMaskTemplateVo implements Serializable {
 
     private String maskExpr;
 
+    private String maskChar;
+
+    private String maskPosition;
+
+    private Integer maskHeadKeep;
+
+    private Integer maskTailKeep;
+
+    private String maskPattern;
+
     private String templateDesc;
 
     private String builtin;

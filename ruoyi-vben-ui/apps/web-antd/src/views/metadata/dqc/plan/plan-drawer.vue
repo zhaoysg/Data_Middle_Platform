@@ -1,11 +1,31 @@
 <script setup lang="ts">
-import { computed, reactive, ref, watch } from 'vue';
+import { computed, ref } from 'vue';
 
 import { useVbenDrawer } from '@vben/common-ui';
-import { Form, Input, Radio, Select, message, Modal, Table, Tag, Space } from 'ant-design-vue';
+import {
+  Form,
+  Input,
+  Radio,
+  Select,
+  message,
+  Modal,
+  Table,
+  Tag,
+  Space,
+  Descriptions,
+  Popover,
+  Switch,
+  Divider,
+  Tooltip,
+} from 'ant-design-vue';
 import {
   SearchOutlined,
-  InfoCircleOutlined,
+  BulbOutlined,
+  ClockCircleOutlined,
+  ScheduleOutlined,
+  ApiOutlined,
+  QuestionCircleOutlined,
+  CheckCircleOutlined,
 } from '@ant-design/icons-vue';
 
 import {
@@ -26,23 +46,24 @@ import { dqcRuleList } from '#/api/metadata/dqc/rule';
 
 import WizardDrawer from '#/components/metadata/WizardDrawer.vue';
 
-const triggerTypeOptions = [
-  { label: '手动触发', value: 'MANUAL' },
-  { label: '定时触发', value: 'SCHEDULE' },
-  { label: 'API调用', value: 'API' },
-];
-
 const triggerTypeLabelMap: Record<string, string> = {
   MANUAL: '手动触发',
   SCHEDULE: '定时触发',
-  API: 'API调用',
+  API: 'API 触发',
 };
 
+const triggerTypeTagColor: Record<string, string> = {
+  MANUAL: 'blue',
+  SCHEDULE: 'purple',
+  API: 'cyan',
+};
+
+/** 敏感等级（无 Emoji，便于对齐与无障碍） */
 const sensitivityLevelOptions = [
-  { label: '🔴 L4 机密', value: 'L4' },
-  { label: '🟠 L3 敏感', value: 'L3' },
-  { label: '🔵 L2 内部', value: 'L2' },
-  { label: '🟢 L1 公开', value: 'L1' },
+  { value: 'L4', title: 'L4 机密', hint: '最高敏感', level: 'L4' as const },
+  { value: 'L3', title: 'L3 敏感', hint: '高敏感', level: 'L3' as const },
+  { value: 'L2', title: 'L2 内部', hint: '内部可见', level: 'L2' as const },
+  { value: 'L1', title: 'L1 公开', hint: '可公开', level: 'L1' as const },
 ];
 
 const sensitivityTextColor: Record<string, string> = {
@@ -76,20 +97,13 @@ const ruleStrengthColor: Record<string, string> = {
   WEAK: 'orange',
 };
 
-const cronExamples = [
-  { label: '每天凌晨2点', value: '0 0 2 * * ?' },
-  { label: '每天8:30', value: '0 30 8 * * ?' },
-  { label: '工作日上午9点', value: '0 0 9 ? * MON-FRI' },
-  { label: '每30分钟', value: '0 0/30 * * * ?' },
-  { label: '每周一凌晨2点', value: '0 0 2 ? * 1' },
-];
-
+/** 与 bgdata 质检方案向导一致：主标题 + 副标题 */
 const steps = [
-  { title: '基本信息' },
-  { title: '绑定表范围' },
-  { title: '字段与规则' },
-  { title: '调度配置' },
-  { title: '预览保存' },
+  { title: '基本信息', description: '方案名称和描述' },
+  { title: '绑定表范围', description: '选择检测目标' },
+  { title: '字段与规则', description: '全列展示并绑定质检规则' },
+  { title: '调度配置', description: '执行和告警配置' },
+  { title: '预览保存', description: '确认并创建' },
 ];
 
 const emit = defineEmits<{ reload: [] }>();
@@ -112,8 +126,11 @@ const datasourceOptions = ref<{ label: string; value: number; dsType?: string }[
 const bindDsId = ref<number>();
 const dsType = ref<string>();
 const tableLoading = ref(false);
-const availableTables = ref<string[]>([]);
-const availableTableSet = ref<Set<string>>(new Set());
+/** 数据源下全部表名（仅作下拉选项，勿与已选混淆） */
+const tableCatalog = ref<string[]>([]);
+/** 用户勾选要质检的表 */
+const selectedTables = ref<string[]>([]);
+const selectedTableSet = ref<Set<string>>(new Set());
 
 // ---- Schema 相关（PostgreSQL） ----
 const schemaList = ref<string[]>([]);
@@ -167,7 +184,7 @@ const ruleSelectorLoading2 = ref(false);
 // ---- API规则列表参数 ----
 const ruleFilterKeyword = ref<string>();
 
-const title = computed(() => (recordId.value ? '编辑质检方案' : '新增质检方案'));
+const title = computed(() => (recordId.value ? '编辑方案' : '新建方案'));
 
 const [BasicDrawer, drawerApi] = useVbenDrawer({
   destroyOnClose: true,
@@ -189,6 +206,10 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       const { id } = drawerApi.getData() as { id?: number };
       if (id) {
         recordId.value = id;
+        tableCatalog.value = [];
+        selectedTables.value = [];
+        selectedTableSet.value = new Set();
+        tableBindings.value = [];
         const info = await dqcPlanInfo(id);
         formValues.value = { ...info };
         bindDsId.value = info.dsId;
@@ -215,9 +236,20 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
               }
             }
 
+            if (bv.dsId) {
+              try {
+                const catalog = await datasourceTables(
+                  Number(bv.dsId),
+                  bv.schema || undefined,
+                );
+                tableCatalog.value = catalog || [];
+              } catch (_) {
+                tableCatalog.value = [];
+              }
+            }
             if (bv.tables && Array.isArray(bv.tables)) {
-              availableTables.value = bv.tables;
-              availableTableSet.value = new Set(bv.tables);
+              selectedTables.value = [...bv.tables];
+              selectedTableSet.value = new Set(bv.tables);
               for (const tbl of bv.tables) {
                 await loadTableColumns(tbl);
               }
@@ -226,6 +258,36 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
               formValues.value.bindSensitivityLevel = bv.bindSensitivityLevel;
             }
           } catch (_) {}
+        }
+
+        // 无 bindValue / 旧数据：仍根据 dsId 拉表清单，避免编辑时下拉为空
+        if (bindDsId.value) {
+          const ds = datasourceOptions.value.find((d) => d.value === bindDsId.value);
+          if (ds) dsType.value = ds.dsType;
+          if (
+            tableCatalog.value.length === 0 &&
+            (!isPostgresBind.value || bindSchema.value)
+          ) {
+            try {
+              const catalog = await datasourceTables(
+                bindDsId.value,
+                bindSchema.value || undefined,
+              );
+              tableCatalog.value = catalog || [];
+            } catch (_) {
+              tableCatalog.value = [];
+            }
+          }
+          if (isPostgresBind.value && schemaList.value.length === 0) {
+            schemaLoading.value = true;
+            try {
+              const schemas = await datasourceSchemas(bindDsId.value);
+              schemaList.value = schemas?.data || schemas || [];
+            } catch (_) {}
+            finally {
+              schemaLoading.value = false;
+            }
+          }
         }
 
         // 加载已绑定的规则
@@ -243,6 +305,9 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
           bindSensitivityLevel: '',
         };
         tableBindings.value = [];
+        tableCatalog.value = [];
+        selectedTables.value = [];
+        selectedTableSet.value = new Set();
       }
       currentStep.value = 0;
     } finally {
@@ -286,8 +351,9 @@ async function onDsChange(dsId: number) {
   bindSchema.value = '';
   schemaList.value = [];
   tableBindings.value = [];
-  availableTables.value = [];
-  availableTableSet.value = new Set();
+  tableCatalog.value = [];
+  selectedTables.value = [];
+  selectedTableSet.value = new Set();
   if (!dsId) return;
 
   const ds = datasourceOptions.value.find((d) => d.value === dsId);
@@ -306,10 +372,10 @@ async function onDsChange(dsId: number) {
   tableLoading.value = true;
   try {
     const tables = await datasourceTables(dsId);
-    availableTables.value = tables || [];
-    availableTableSet.value = new Set(tables || []);
+    tableCatalog.value = tables || [];
   } catch (_) {
-    availableTables.value = [];
+    tableCatalog.value = [];
+    message.warning('加载表清单失败，请检查数据源连接与权限');
   } finally {
     tableLoading.value = false;
   }
@@ -319,16 +385,17 @@ async function onDsChange(dsId: number) {
 async function onSchemaChange(schema: string) {
   bindSchema.value = schema;
   tableBindings.value = [];
-  availableTables.value = [];
-  availableTableSet.value = new Set();
+  tableCatalog.value = [];
+  selectedTables.value = [];
+  selectedTableSet.value = new Set();
   if (!bindDsId.value) return;
   tableLoading.value = true;
   try {
     const tables = await datasourceTables(bindDsId.value, schema);
-    availableTables.value = tables || [];
-    availableTableSet.value = new Set(tables || []);
+    tableCatalog.value = tables || [];
   } catch (_) {
-    availableTables.value = [];
+    tableCatalog.value = [];
+    message.warning('加载表清单失败，请检查 Schema 或权限');
   } finally {
     tableLoading.value = false;
   }
@@ -348,6 +415,7 @@ async function loadTableColumns(tableName: string) {
       binding.columns = colNames;
     }
   } catch (_) {
+    message.error(`加载表「${tableName}」的字段失败，请检查数据源、元数据同步或账号权限`);
     let binding = tableBindings.value.find((tb) => tb.tableName === tableName);
     if (!binding) {
       binding = { tableName, columns: [], columnRules: {} };
@@ -358,18 +426,17 @@ async function loadTableColumns(tableName: string) {
 
 // ---- 选择表：加入 tableBindings 并加载字段 ----
 async function onTableSelectChange(selected: string[]) {
-  // 新增的表
-  const added = selected.filter((t) => !availableTableSet.value.has(t));
-  // 移除的表
-  const removed = [...availableTableSet.value].filter((t) => !selected.includes(t));
+  const prev = selectedTableSet.value;
+  const next = selected || [];
+  const nextSet = new Set(next);
+  const added = next.filter((t) => !prev.has(t));
 
   for (const t of added) {
     await loadTableColumns(t);
   }
-  availableTableSet.value = new Set(selected);
-  availableTables.value = selected;
-  // 删除移除的表的 binding
-  tableBindings.value = tableBindings.value.filter((tb) => selected.includes(tb.tableName));
+  selectedTableSet.value = nextSet;
+  selectedTables.value = next;
+  tableBindings.value = tableBindings.value.filter((tb) => next.includes(tb.tableName));
 }
 
 // ---- 扁平行 ----
@@ -528,7 +595,7 @@ function buildBindValue(): string {
     v: 2,
     dsId: bindDsId.value,
     schema: bindSchema.value || undefined,
-    tables: availableTables.value || [],
+    tables: selectedTables.value || [],
     bindSensitivityLevel: formValues.value.bindSensitivityLevel || undefined,
     // 以下字段由前端通过规则绑定API单独管理
   });
@@ -554,7 +621,7 @@ function buildPayload() {
     autoBlock: f.autoBlock,
     status: f.status,
     ruleCount: totalBoundRules.value,
-    tableCount: availableTables.value.length,
+    tableCount: selectedTables.value.length,
   };
 }
 
@@ -570,8 +637,9 @@ function handleClosed() {
     bindSensitivityLevel: '',
   };
   tableBindings.value = [];
-  availableTables.value = [];
-  availableTableSet.value = new Set();
+  tableCatalog.value = [];
+  selectedTables.value = [];
+  selectedTableSet.value = new Set();
   bindDsId.value = undefined;
   bindSchema.value = '';
   schemaList.value = [];
@@ -587,7 +655,7 @@ const step0Valid = computed(() => {
 const step1Valid = computed(() => {
   if (!bindDsId.value) return false;
   if (isPostgresBind.value && !bindSchema.value) return false;
-  return availableTables.value.length > 0;
+  return selectedTables.value.length > 0;
 });
 
 const step3Valid = computed(() => {
@@ -625,14 +693,19 @@ function validateStep(step: number): boolean {
   return true;
 }
 
-function handleWizardNext() {
+async function handleWizardNext() {
   if (!validateStep(currentStep.value)) return;
   // 进入字段步骤时，确保已选表的字段都已加载
-  if (currentStep.value === 1 && availableTables.value.length > 0) {
-    for (const t of availableTables.value) {
-      if (!tableBindings.value.find((tb) => tb.tableName === t)) {
-        loadTableColumns(t);
-      }
+  if (currentStep.value === 1 && selectedTables.value.length > 0) {
+    await Promise.all(
+      selectedTables.value
+        .filter((t) => !tableBindings.value.find((tb) => tb.tableName === t))
+        .map((t) => loadTableColumns(t)),
+    );
+    if (selectedColumnCount.value === 0) {
+      message.warning(
+        '当前已选表未加载到任何字段，请确认数据源元数据已采集，或检查库表权限后再试。',
+      );
     }
   }
   wizardRef.value?.nextStep();
@@ -640,8 +713,24 @@ function handleWizardNext() {
 
 // ---- 预览 ----
 const previewRuleCount = computed(() => totalBoundRules.value);
-const previewTableCount = computed(() => availableTables.value.length);
+const previewTableCount = computed(() => selectedTables.value.length);
 const previewColumnCount = computed(() => selectedColumnCount.value);
+
+const strongRuleCount = computed(() => {
+  let n = 0;
+  for (const tb of tableBindings.value) {
+    for (const rules of Object.values(tb.columnRules)) {
+      for (const r of rules || []) {
+        if ((r as any).ruleStrength === 'STRONG') n++;
+      }
+    }
+  }
+  return n;
+});
+
+const weakRuleCount = computed(() =>
+  Math.max(0, previewRuleCount.value - strongRuleCount.value),
+);
 
 const triggerTypeLabel = computed(
   () => triggerTypeLabelMap[formValues.value.triggerType || ''] || '-',
@@ -649,6 +738,16 @@ const triggerTypeLabel = computed(
 const dsLabel = computed(
   () => datasourceOptions.value.find((d) => d.value === bindDsId.value)?.label || '-',
 );
+
+function setAlertSuccess(checked: boolean) {
+  formValues.value.alertOnSuccess = checked ? '1' : '0';
+}
+function setAlertFailure(checked: boolean) {
+  formValues.value.alertOnFailure = checked ? '1' : '0';
+}
+function setAutoBlock(checked: boolean) {
+  formValues.value.autoBlock = checked ? '1' : '0';
+}
 
 // ---- 规则过滤 ----
 const ruleFilterOptions = computed(() => {
@@ -667,33 +766,45 @@ const ruleFilterOptions = computed(() => {
 </script>
 
 <template>
-  <BasicDrawer :title="title" class="w-[1100px]" :loading="submitting">
+  <BasicDrawer :title="title" class="plan-wizard-drawer w-[min(1680px,98vw)]" :loading="submitting">
     <WizardDrawer
       ref="wizardRef"
+      step-variant="horizontal"
       :steps="steps"
       v-model:currentStep="currentStep"
       :loading="submitting"
       @finish="handleSubmit"
       @next="handleWizardNext"
     >
-      <!-- Step 0: 基本信息 -->
+      <!-- Step 0: 基本信息（bgdata 布局） -->
       <template #step-0>
-        <Form :model="formValues" layout="vertical">
+        <div class="plan-step-guide">
+          <BulbOutlined />
+          <span>配置方案的基本信息，包括名称、编码和描述</span>
+        </div>
+        <Form
+          :model="formValues"
+          :label-col="{ span: 5 }"
+          :wrapper-col="{ span: 18 }"
+        >
           <Form.Item label="方案名称" required>
-            <Input v-model:value="formValues.planName" placeholder="请输入方案名称" />
+            <Input
+              v-model:value="formValues.planName"
+              placeholder="请输入方案名称，建议使用业务可读名称"
+            />
           </Form.Item>
           <Form.Item label="方案编码" required>
             <Input
               v-model:value="formValues.planCode"
-              placeholder="请输入唯一编码"
+              placeholder="唯一编码，创建后不可修改"
               :disabled="!!recordId"
             />
           </Form.Item>
-          <Form.Item label="方案描述">
+          <Form.Item label="方案描述" name="planDesc">
             <Input.TextArea
               v-model:value="formValues.planDesc"
-              placeholder="请输入方案描述"
               :rows="3"
+              placeholder="描述该方案的作用范围和目标"
             />
           </Form.Item>
           <Form.Item label="状态">
@@ -708,10 +819,12 @@ const ruleFilterOptions = computed(() => {
       <!-- Step 1: 绑定表范围 -->
       <template #step-1>
         <div class="space-y-4">
-          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-            <InfoCircleOutlined class="mr-1" />
-            选择<strong>数据源</strong>后，再选择要质检的<strong>目标表</strong>。
-            PostgreSQL 数据源请先选择 <strong>Schema</strong> 再选表。
+          <div class="plan-step-guide plan-step-guide-multiline">
+            <BulbOutlined />
+            <span>
+              请选择<strong>数据源</strong>与<strong>目标表</strong>；下一步将同页列出字段并绑定规则（执行 SQL 会带库名/Schema）。
+              <strong>PostgreSQL</strong> 数据源必须先选择 <strong>Schema</strong>。
+            </span>
           </div>
 
           <div class="grid grid-cols-2 gap-4">
@@ -737,80 +850,101 @@ const ruleFilterOptions = computed(() => {
                 @change="onSchemaChange"
               />
             </Form.Item>
-            <Form.Item v-else label="质检数据层" class="mb-0">
-              <Input v-model:value="formValues.layerCode" placeholder="如: ODS, DWD, DWS" />
+            <Form.Item v-else class="mb-0">
+              <template #label>
+                <span>分层标签</span>
+                <Tooltip
+                  title="与「选哪张表」无关：仅用于方案列表里的展示/筛选（如 ODS、DWD）。若数据源配置里已有分层可留空；非数仓分层场景也可不填。"
+                >
+                  <QuestionCircleOutlined class="ml-1 text-gray-400 align-middle cursor-help" />
+                </Tooltip>
+              </template>
+              <Input v-model:value="formValues.layerCode" placeholder="可选，如 ODS / DWD / DWS" />
             </Form.Item>
           </div>
 
-          <!-- 敏感等级绑定（可选） -->
-          <div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
-            <div class="text-sm font-medium text-gray-700 mb-3">敏感等级绑定（可选）</div>
-            <p class="text-xs text-gray-500 mb-3">
-              选择后将只为指定敏感等级的字段绑定质检规则（需先在「数据安全 → 敏感字段识别」完成扫描）。
+          <!-- 敏感等级绑定（可选）：卡片式单选 +「不限制」 -->
+          <div class="sens-bind-panel">
+            <div class="sens-bind-panel-head">
+              <span class="sens-bind-panel-title">敏感等级过滤</span>
+              <Tag class="sens-bind-optional-tag">可选</Tag>
+            </div>
+            <p class="sens-bind-panel-desc">
+              开启后，仅对<strong>该等级</strong>的敏感字段重点做规则绑定策略（需先在「数据安全 → 敏感字段识别」完成扫描）。不选表示不按等级过滤。
             </p>
-            <div class="flex gap-3 flex-wrap">
-              <label
+            <div class="sens-level-grid" role="radiogroup" aria-label="敏感等级">
+              <button
+                type="button"
+                class="sens-level-card sens-level-card-none"
+                :class="{ 'is-active': !formValues.bindSensitivityLevel }"
+                @click="formValues.bindSensitivityLevel = ''"
+              >
+                <span class="sens-level-card-title">不限制</span>
+                <span class="sens-level-card-hint">按已选表的全部字段列示</span>
+              </button>
+              <button
                 v-for="opt in sensitivityLevelOptions"
                 :key="opt.value"
-                class="flex items-center gap-2 px-3 py-2 rounded-lg border cursor-pointer transition-all text-sm"
-                :class="
-                  formValues.bindSensitivityLevel === opt.value
-                    ? 'border-current font-medium'
-                    : 'border-gray-200 hover:border-gray-300'
-                "
-                :style="
-                  formValues.bindSensitivityLevel === opt.value
-                    ? {
-                        borderColor: sensitivityTextColor[opt.value],
-                        color: sensitivityTextColor[opt.value],
-                        backgroundColor: sensitivityBgColor[opt.value],
-                      }
-                    : {}
-                "
+                type="button"
+                class="sens-level-card"
+                :class="{ 'is-active': formValues.bindSensitivityLevel === opt.value }"
+                :style="{
+                  '--sens-accent': sensitivityTextColor[opt.value],
+                  '--sens-bg': sensitivityBgColor[opt.value],
+                }"
+                @click="formValues.bindSensitivityLevel = opt.value"
               >
-                <input
-                  type="radio"
-                  :value="opt.value"
-                  v-model="formValues.bindSensitivityLevel"
-                  class="hidden"
-                />
-                {{ opt.label }}
-              </label>
+                <span class="sens-level-dot" :style="{ background: sensitivityTextColor[opt.value] }" />
+                <span class="sens-level-card-title">{{ opt.title }}</span>
+                <span class="sens-level-card-hint">{{ opt.hint }}</span>
+              </button>
             </div>
           </div>
 
           <Form.Item label="目标表（多选）" required>
             <Select
-              v-model:value="availableTables"
+              v-model:value="selectedTables"
               mode="multiple"
               :placeholder="tableSelectPlaceholder"
               :loading="tableLoading"
               show-search
-              :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
+              :filter-option="(input: string, option: any) =>
+                String(option?.label ?? '')
+                  .toLowerCase()
+                  .includes(input.toLowerCase())"
               :disabled="!bindDsId || (isPostgresBind && !bindSchema)"
+              :max-tag-count="8"
               option-label-prop="label"
+              option-filter-prop="label"
               @change="onTableSelectChange"
             >
               <Select.Option
-                v-for="t in availableTables"
+                v-for="t in tableCatalog"
                 :key="t"
                 :value="t"
                 :label="t"
               >
-                <div class="flex justify-between items-center">
-                  <span>{{ t }}</span>
-                  <Tag v-if="tableBindings.find((tb) => tb.tableName === t)" size="small" color="green">
+                <div class="flex justify-between items-center gap-2">
+                  <span class="truncate">{{ t }}</span>
+                  <Tag
+                    v-if="selectedTables.includes(t) && tableBindings.find((tb) => tb.tableName === t)"
+                    size="small"
+                    color="green"
+                  >
                     {{ tableBindings.find((tb) => tb.tableName === t)?.columns?.length || 0 }} 列
                   </Tag>
                 </div>
               </Select.Option>
             </Select>
-            <div class="text-xs text-gray-500 mt-1">
-              已选择
-              <strong>{{ availableTables.length }}</strong>
-              张表，共
-              <strong>{{ selectedColumnCount }}</strong>
-              个字段（进入下一步后可绑定规则）
+            <div class="text-xs text-gray-500 mt-1 space-y-0.5">
+              <div>
+                库中可选 <strong>{{ tableCatalog.length }}</strong> 张表 · 已勾选
+                <strong>{{ selectedTables.length }}</strong> 张 · 已加载字段共
+                <strong>{{ selectedColumnCount }}</strong> 列（下一步绑定规则）
+              </div>
+              <div class="text-gray-400">
+                不会默认全选；表很多时请用搜索缩小范围后勾选。
+              </div>
             </div>
           </Form.Item>
         </div>
@@ -819,17 +953,22 @@ const ruleFilterOptions = computed(() => {
       <!-- Step 2: 字段与规则 -->
       <template #step-2>
         <div class="space-y-4">
-          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-            <InfoCircleOutlined class="mr-1" />
-            以下列出所有已选表的字段，点击「绑定规则」为字段关联质检规则。
+          <div class="plan-step-guide plan-step-guide-lg">
+            <BulbOutlined />
+            <span>
+              数据源 <strong>{{ dsLabel }}</strong>
+              <template v-if="bindSchema"> · Schema：{{ bindSchema }}</template>
+              。下列为各表<strong>全部已选字段</strong>；对需要质检的字段点击「绑定规则」关联质检规则。
+            </span>
           </div>
 
-          <div v-if="tableBindings.length === 0" class="text-center text-gray-400 py-12">
-            暂无字段，请返回上一步选择数据源和表
+          <div v-if="tableBindings.length === 0" class="wizard-empty-hint">
+            请先在「绑定表范围」中选择数据源与表
           </div>
 
           <Table
             v-else
+            class="field-rules-table"
             :data-source="flattenedRows"
             :pagination="{ pageSize: 20, showSizeChanger: true, showTotal: (total: number) => `共 ${total} 条` }"
             size="middle"
@@ -854,7 +993,10 @@ const ruleFilterOptions = computed(() => {
                   >
                     {{ r.ruleName }}
                   </Tag>
-                  <span v-if="!record.rules || record.rules.length === 0" class="text-gray-400 text-xs">
+                  <span
+                    v-if="!record.rules || record.rules.length === 0"
+                    class="text-muted-field text-xs"
+                  >
                     未绑定
                   </span>
                 </Space>
@@ -864,16 +1006,12 @@ const ruleFilterOptions = computed(() => {
               <template #default="{ record }">
                 <span
                   v-if="record.rules && record.rules.length > 0"
-                  class="inline-flex items-center justify-center w-6 h-6 rounded-full text-xs font-medium"
-                  :class="
-                    record.rules.length > 2
-                      ? 'bg-red-100 text-red-600'
-                      : 'bg-orange-100 text-orange-600'
-                  "
+                  class="field-rule-count-pill"
+                  :title="`已绑定 ${record.rules.length} 条规则`"
                 >
-                  {{ record.rules.length }}
+                  {{ record.rules.length > 99 ? '99+' : record.rules.length }}
                 </span>
-                <span v-else class="text-gray-300">—</span>
+                <span v-else class="field-rule-count-empty" title="未绑定规则">—</span>
               </template>
             </Table.Column>
             <Table.Column title="操作" width="140" align="center" fixed="right">
@@ -888,198 +1026,241 @@ const ruleFilterOptions = computed(() => {
               </template>
             </Table.Column>
           </Table>
+          <div
+            v-if="tableBindings.length > 0 && flattenedRows.length === 0"
+            class="wizard-empty-hint"
+          >
+            暂无字段，请返回上一步检查表选择或数据源连接
+          </div>
         </div>
       </template>
 
-      <!-- Step 3: 调度配置 -->
+      <!-- Step 3: 调度配置（bgdata：图标单选 + 开关告警） -->
       <template #step-3>
         <div class="space-y-4">
-          <div class="bg-blue-50 border border-blue-200 rounded-lg p-4 text-sm text-blue-700">
-            <p class="mb-2 font-medium">Cron 表达式示例：</p>
-            <ul class="list-disc list-inside space-y-1">
-              <li
-                v-for="ex in cronExamples"
-                :key="ex.value"
-                class="cursor-pointer hover:text-blue-900"
-                @click="formValues.triggerCron = ex.value"
-              >
-                {{ ex.label }}：
-                <code class="bg-blue-100 px-1 rounded">{{ ex.value }}</code>
-              </li>
-            </ul>
+          <div class="plan-step-guide">
+            <BulbOutlined />
+            <span>配置方案的执行触发方式及告警通知策略</span>
           </div>
-
-          <Form :model="formValues" layout="vertical">
+          <Form
+            :model="formValues"
+            :label-col="{ span: 6 }"
+            :wrapper-col="{ span: 16 }"
+          >
             <Form.Item label="触发方式">
-              <Radio.Group v-model:value="formValues.triggerType" :options="triggerTypeOptions" />
+              <Radio.Group v-model:value="formValues.triggerType" class="plan-trigger-group">
+                <Radio value="MANUAL" class="plan-trigger-radio">
+                  <span class="trigger-option">
+                    <span class="trigger-icon-wrap"><ClockCircleOutlined /></span>
+                    <span>
+                      <strong>手动触发</strong>
+                      <span class="trigger-desc">手动点击执行按钮触发检测</span>
+                    </span>
+                  </span>
+                </Radio>
+                <Radio value="SCHEDULE" class="plan-trigger-radio">
+                  <span class="trigger-option">
+                    <span class="trigger-icon-wrap"><ScheduleOutlined /></span>
+                    <span>
+                      <strong>定时触发</strong>
+                      <span class="trigger-desc">按 Cron 表达式定时执行</span>
+                    </span>
+                  </span>
+                </Radio>
+                <Radio value="API" class="plan-trigger-radio">
+                  <span class="trigger-option">
+                    <span class="trigger-icon-wrap"><ApiOutlined /></span>
+                    <span>
+                      <strong>API 触发</strong>
+                      <span class="trigger-desc">通过外部接口调用触发</span>
+                    </span>
+                  </span>
+                </Radio>
+              </Radio.Group>
             </Form.Item>
 
             <Form.Item
               v-if="formValues.triggerType === 'SCHEDULE'"
               label="Cron 表达式"
-              required
             >
-              <Input
-                v-model:value="formValues.triggerCron"
-                placeholder="如: 0 0 2 * * ?"
-              />
+              <Input v-model:value="formValues.triggerCron" placeholder="0 0 2 * * ?">
+                <template #suffix>
+                  <Popover title="常用表达式" trigger="click">
+                    <template #content>
+                      <div class="cron-helper">
+                        <div @click="formValues.triggerCron = '0 0 2 * * ?'">
+                          每天凌晨 2 点：<code>0 0 2 * * ?</code>
+                        </div>
+                        <div @click="formValues.triggerCron = '0 30 8 * * ?'">
+                          每天 8:30：<code>0 30 8 * * ?</code>
+                        </div>
+                        <div @click="formValues.triggerCron = '0 0/30 * * * ?'">
+                          每 30 分钟：<code>0 0/30 * * * ?</code>
+                        </div>
+                        <div @click="formValues.triggerCron = '0 0 2 ? * 1'">
+                          每周一 2 点：<code>0 0 2 ? * 1</code>
+                        </div>
+                      </div>
+                    </template>
+                    <a class="text-primary text-sm cursor-pointer">常用 ▼</a>
+                  </Popover>
+                </template>
+              </Input>
+              <div class="field-tip">6 位 Cron：秒 分 时 日 月 周（? 表示不指定）</div>
             </Form.Item>
 
-            <a-divider>告警配置</a-divider>
+            <Divider>告警配置</Divider>
 
-            <div class="grid grid-cols-2 gap-4">
-              <Form.Item label="执行成功通知" class="mb-0">
-                <Radio.Group v-model:value="formValues.alertOnSuccess">
-                  <Radio value="1">通知</Radio>
-                  <Radio value="0">不通知</Radio>
-                </Radio.Group>
-              </Form.Item>
-              <Form.Item label="执行失败通知" class="mb-0">
-                <Radio.Group v-model:value="formValues.alertOnFailure">
-                  <Radio value="1">通知</Radio>
-                  <Radio value="0">不通知</Radio>
-                </Radio.Group>
-              </Form.Item>
-            </div>
-
-            <Form.Item label="强规则失败" class="mt-4">
-              <Radio.Group v-model:value="formValues.autoBlock">
-                <Radio value="1">阻塞任务</Radio>
-                <Radio value="0">仅记录</Radio>
-              </Radio.Group>
-              <div class="text-xs text-gray-500 mt-1">
-                强规则失败时是否阻塞下游任务执行
-              </div>
+            <Form.Item label="执行成功">
+              <Switch
+                :checked="formValues.alertOnSuccess === '1'"
+                @update:checked="setAlertSuccess"
+              />
+              <span class="switch-label">{{
+                formValues.alertOnSuccess === '1' ? '通知' : '不通知'
+              }}</span>
+            </Form.Item>
+            <Form.Item label="执行失败">
+              <Switch
+                :checked="formValues.alertOnFailure === '1'"
+                @update:checked="setAlertFailure"
+              />
+              <span class="switch-label">{{
+                formValues.alertOnFailure === '1' ? '通知' : '不通知'
+              }}</span>
+            </Form.Item>
+            <Form.Item label="强规则失败">
+              <Switch
+                :checked="formValues.autoBlock === '1'"
+                @update:checked="setAutoBlock"
+              />
+              <span class="switch-label">{{
+                formValues.autoBlock === '1' ? '阻塞任务' : '仅记录'
+              }}</span>
+              <Tooltip title="强规则失败时是否阻塞下游任务执行">
+                <span class="plan-help-icon-wrap">
+                  <QuestionCircleOutlined class="plan-help-icon" />
+                </span>
+              </Tooltip>
             </Form.Item>
           </Form>
         </div>
       </template>
 
-      <!-- Step 4: 预览保存 -->
+      <!-- Step 4: 预览保存（bgdata：总览 + 分区标题 + Descriptions） -->
       <template #step-4>
-        <div class="space-y-4">
-          <div class="text-sm text-gray-500 mb-2">请确认以下配置，确认无误后点击保存。</div>
-          <div class="bg-gray-50 rounded-lg p-4 space-y-4">
-            <div>
-              <div class="text-base font-medium text-gray-800 mb-2">基本信息</div>
-              <div class="grid grid-cols-2 gap-y-2 text-sm">
-                <div>
-                  <span class="text-gray-500">方案名称：</span>
-                  <span>{{ formValues.planName || '-' }}</span>
-                </div>
-                <div>
-                  <span class="text-gray-500">方案编码：</span>
-                  <code class="bg-gray-200 px-1 rounded">{{ formValues.planCode || '-' }}</code>
-                </div>
-                <div>
-                  <span class="text-gray-500">状态：</span>
-                  <Tag :color="formValues.status === 'PUBLISHED' ? 'green' : 'default'">
-                    {{ formValues.status === 'PUBLISHED' ? '已发布' : '草稿' }}
-                  </Tag>
-                </div>
-                <div>
-                  <span class="text-gray-500">数据源：</span>
-                  <span>{{ dsLabel }}</span>
-                </div>
-                <div class="col-span-2">
-                  <span class="text-gray-500">描述：</span>
-                  <span>{{ formValues.planDesc || '-' }}</span>
-                </div>
-              </div>
+        <div class="plan-preview-wrap">
+          <div class="text-sm text-gray-500 mb-3">
+            请确认以下配置，确认无误后点击保存。
+          </div>
+          <div class="preview-section">
+            <div class="preview-title">
+              <CheckCircleOutlined />
+              方案配置总览
             </div>
 
-            <div>
-              <div class="text-base font-medium text-gray-800 mb-2">绑定范围</div>
-              <div class="grid grid-cols-2 gap-y-2 text-sm">
-                <div>
-                  <span class="text-gray-500">数据源ID：</span>
-                  <span>{{ bindDsId || '-' }}</span>
-                </div>
-                <div>
-                  <span class="text-gray-500">涉及表：</span>
-                  <span>{{ previewTableCount }} 张</span>
-                </div>
-                <div>
-                  <span class="text-gray-500">涉及字段：</span>
-                  <span>{{ previewColumnCount }} 个</span>
-                </div>
-                <div v-if="formValues.bindSensitivityLevel">
-                  <span class="text-gray-500">敏感等级：</span>
-                  <Tag
-                    :style="{
-                      color: sensitivityTextColor[formValues.bindSensitivityLevel],
-                      backgroundColor: sensitivityBgColor[formValues.bindSensitivityLevel],
-                    }"
-                  >
-                    {{ formValues.bindSensitivityLevel }}
-                  </Tag>
-                </div>
-              </div>
-              <div v-if="availableTables.length > 0" class="mt-2">
-                <Tag v-for="t in availableTables.slice(0, 10)" :key="t" size="small" class="mb-1">
-                  {{ t }}
+            <div class="detail-title">基本信息</div>
+            <Descriptions bordered size="small" :column="2" class="mb-4">
+              <Descriptions.Item label="方案名称">
+                {{ formValues.planName || '—' }}
+              </Descriptions.Item>
+              <Descriptions.Item label="方案编码">
+                <code class="plan-code-inline">{{ formValues.planCode || '—' }}</code>
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <Tag :color="formValues.status === 'PUBLISHED' ? 'success' : 'default'">
+                  {{ formValues.status === 'PUBLISHED' ? '已发布' : '草稿' }}
                 </Tag>
-                <Tag v-if="availableTables.length > 10" size="small">
-                  +{{ availableTables.length - 10 }} 更多
-                </Tag>
-              </div>
-            </div>
+              </Descriptions.Item>
+              <Descriptions.Item label="数据源（实例）">
+                {{ dsLabel }}
+              </Descriptions.Item>
+              <Descriptions.Item label="描述" :span="2">
+                {{ formValues.planDesc || '—' }}
+              </Descriptions.Item>
+            </Descriptions>
 
-            <div>
-              <div class="text-base font-medium text-gray-800 mb-2">调度配置</div>
-              <div class="grid grid-cols-2 gap-y-2 text-sm">
-                <div>
-                  <span class="text-gray-500">触发方式：</span>
-                  <Tag color="blue">{{ triggerTypeLabel }}</Tag>
-                </div>
-                <div v-if="formValues.triggerType === 'SCHEDULE'">
-                  <span class="text-gray-500">Cron：</span>
-                  <code class="bg-gray-200 px-1 rounded">{{ formValues.triggerCron || '-' }}</code>
-                </div>
-                <div>
-                  <span class="text-gray-500">失败通知：</span>
-                  <span>{{ formValues.alertOnFailure === '1' ? '是' : '否' }}</span>
-                </div>
-                <div>
-                  <span class="text-gray-500">强规则阻塞：</span>
-                  <span>{{ formValues.autoBlock === '1' ? '是' : '否' }}</span>
-                </div>
-              </div>
-            </div>
-
-            <div>
-              <div class="text-base font-medium text-gray-800 mb-2">
-                规则绑定
-                <span class="text-sm font-normal text-gray-500 ml-2">
-                  共 {{ previewRuleCount }} 条规则
+            <div class="detail-title">绑定范围</div>
+            <Descriptions bordered size="small" :column="2" class="mb-2">
+              <Descriptions.Item label="数据源ID">
+                {{ bindDsId ?? '—' }}
+              </Descriptions.Item>
+              <Descriptions.Item label="涉及表">
+                {{ previewTableCount }} 张
+                <span v-if="bindSchema" class="text-gray-400 text-xs ml-1">
+                  ，Schema：{{ bindSchema }}
                 </span>
-              </div>
-              <div
-                v-if="previewRuleCount === 0"
-                class="text-sm text-orange-500 bg-orange-50 rounded px-3 py-2"
-              >
-                尚未绑定任何规则，建议在「字段与规则」步骤中绑定质检规则
-              </div>
-              <div v-else class="space-y-1">
-                <div
-                  v-for="tb in tableBindings"
-                  :key="tb.tableName"
-                  class="text-sm"
+              </Descriptions.Item>
+              <Descriptions.Item label="涉及字段">
+                {{ previewColumnCount }} 个
+              </Descriptions.Item>
+              <Descriptions.Item v-if="formValues.bindSensitivityLevel" label="敏感等级">
+                <Tag
+                  :style="{
+                    color: sensitivityTextColor[formValues.bindSensitivityLevel],
+                    backgroundColor: sensitivityBgColor[formValues.bindSensitivityLevel],
+                    border: 'none',
+                  }"
                 >
-                  <div class="font-medium text-gray-700">{{ tb.tableName }}</div>
-                  <div class="ml-3 flex flex-wrap gap-1 mt-1">
-                    <Tag
-                      v-for="col in tb.columns"
-                      :key="col"
-                      size="small"
-                      :color="(tb.columnRules[col]?.length || 0) > 0 ? 'green' : 'default'"
-                    >
-                      {{ col }}
-                      <span v-if="tb.columnRules[col]?.length > 0" class="ml-1 text-xs">
-                        ({{ tb.columnRules[col].length }})
-                      </span>
-                    </Tag>
-                  </div>
+                  {{ formValues.bindSensitivityLevel }}
+                </Tag>
+              </Descriptions.Item>
+            </Descriptions>
+            <div v-if="selectedTables.length > 0" class="preview-table-tags">
+              <Tag v-for="t in selectedTables" :key="t" class="preview-entity-tag">
+                {{ t }}
+              </Tag>
+            </div>
+
+            <div class="detail-title">调度配置</div>
+            <Descriptions bordered size="small" :column="2" class="mb-4">
+              <Descriptions.Item label="触发方式">
+                <Tag :color="triggerTypeTagColor[formValues.triggerType || ''] || 'blue'">
+                  {{ triggerTypeLabel }}
+                </Tag>
+                <template v-if="formValues.triggerType === 'SCHEDULE' && formValues.triggerCron">
+                  <span class="text-gray-500 text-xs ml-2">
+                    Cron：<code class="plan-code-inline">{{ formValues.triggerCron }}</code>
+                  </span>
+                </template>
+              </Descriptions.Item>
+              <Descriptions.Item label="告警配置" :span="2">
+                成功通知：{{ formValues.alertOnSuccess === '1' ? '是' : '否' }}，失败通知：{{
+                  formValues.alertOnFailure === '1' ? '是' : '否'
+                }}，强规则阻塞：{{ formValues.autoBlock === '1' ? '是' : '否' }}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div class="detail-title">
+              规则绑定
+              <span class="detail-count">共 {{ previewRuleCount }} 条规则</span>
+            </div>
+            <div
+              v-if="previewRuleCount === 0"
+              class="plan-preview-alert"
+            >
+              尚未绑定任何规则，建议在「字段与规则」步骤中绑定质检规则
+            </div>
+            <Descriptions v-else bordered size="small" :column="1">
+              <Descriptions.Item label="绑定规则">
+                {{ previewRuleCount }} 条（强规则 {{ strongRuleCount }}，弱规则 {{ weakRuleCount }}）
+              </Descriptions.Item>
+            </Descriptions>
+            <div v-if="previewRuleCount > 0" class="preview-rule-detail mt-2">
+              <div v-for="tb in tableBindings" :key="tb.tableName" class="text-sm mb-2">
+                <div class="font-medium text-gray-700">{{ tb.tableName }}</div>
+                <div class="ml-1 flex flex-wrap gap-1 mt-1">
+                  <Tag
+                    v-for="col in tb.columns"
+                    :key="col"
+                    size="small"
+                    :color="(tb.columnRules[col]?.length || 0) > 0 ? 'green' : 'default'"
+                  >
+                    {{ col }}
+                    <span v-if="tb.columnRules[col]?.length > 0" class="ml-1 text-xs">
+                      ({{ tb.columnRules[col].length }})
+                    </span>
+                  </Tag>
                 </div>
               </div>
             </div>
@@ -1145,3 +1326,300 @@ const ruleFilterOptions = computed(() => {
     </Modal>
   </BasicDrawer>
 </template>
+
+<style scoped>
+/* bgdata 质检方案向导样式对齐 */
+.plan-step-guide {
+  background: #e6f7ff;
+  border: 1px solid #91d5ff;
+  border-radius: 8px;
+  padding: 12px 16px;
+  font-size: 13px;
+  color: #1677ff;
+  margin-bottom: 20px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+.plan-step-guide-multiline {
+  align-items: flex-start;
+}
+.plan-step-guide-lg {
+  align-items: flex-start;
+  line-height: 1.55;
+}
+.wizard-empty-hint {
+  text-align: center;
+  color: #8c8c8c;
+  padding: 48px 16px;
+  font-size: 14px;
+  background: #fafafa;
+  border-radius: 8px;
+  border: 1px dashed #d9d9d9;
+}
+.trigger-option {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-radius: 8px;
+}
+.trigger-icon-wrap {
+  font-size: 20px;
+  color: #1677ff;
+}
+.trigger-option strong {
+  display: block;
+  font-size: 14px;
+  color: #1f1f1f;
+}
+.trigger-desc {
+  display: block;
+  font-size: 12px;
+  color: #8c8c8c;
+  font-weight: normal;
+}
+.plan-trigger-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.plan-trigger-group :deep(.ant-radio-wrapper) {
+  margin-inline-end: 0;
+  margin-bottom: 0;
+  align-items: flex-start;
+  height: auto;
+  padding: 4px 0;
+}
+.field-tip {
+  font-size: 12px;
+  color: #8c8c8c;
+  margin-top: 4px;
+}
+.switch-label {
+  margin-left: 10px;
+  font-size: 13px;
+  color: #595959;
+}
+.plan-help-icon-wrap {
+  margin-left: 8px;
+  display: inline-block;
+  vertical-align: middle;
+  cursor: help;
+  color: #999;
+}
+.plan-help-icon {
+  vertical-align: middle;
+}
+.cron-helper {
+  font-size: 13px;
+  min-width: 220px;
+}
+.cron-helper div {
+  padding: 6px 0;
+  cursor: pointer;
+  color: #1677ff;
+  border-bottom: 1px solid #f0f0f0;
+}
+.cron-helper div:last-child {
+  border-bottom: none;
+}
+.cron-helper div:hover {
+  color: #0958d9;
+}
+.cron-helper code {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  background: #f5f5f5;
+  padding: 1px 4px;
+  border-radius: 3px;
+  margin-left: 8px;
+}
+.preview-section {
+  overflow-x: hidden;
+}
+.preview-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-count {
+  font-size: 12px;
+  font-weight: 400;
+  color: #8c8c8c;
+}
+.plan-code-inline {
+  font-family: ui-monospace, monospace;
+  font-size: 12px;
+  background: #f5f5f5;
+  padding: 2px 6px;
+  border-radius: 4px;
+}
+.preview-table-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 20px;
+}
+.preview-entity-tag {
+  margin: 0;
+  border-radius: 4px;
+  border: 1px solid #d9d9d9;
+  background: #fff;
+  color: #595959;
+}
+.plan-preview-alert {
+  font-size: 13px;
+  color: #d46b08;
+  background: #fff7e6;
+  border: 1px solid #ffd591;
+  border-radius: 8px;
+  padding: 10px 14px;
+  margin-bottom: 12px;
+}
+.field-rule-count-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 22px;
+  height: 22px;
+  padding: 0 6px;
+  border-radius: 11px;
+  font-size: 12px;
+  font-weight: 600;
+  background: #fff7e6;
+  color: #d46b08;
+}
+.field-rule-count-empty {
+  color: #d9d9d9;
+}
+.text-muted-field {
+  color: #8c8c8c;
+}
+.plan-preview-wrap {
+  padding-right: 4px;
+}
+.text-primary {
+  color: #1677ff;
+}
+
+/* 敏感等级：面板 + 2×2 卡片，焦点环可键盘操作 */
+.sens-bind-panel {
+  border: 1px solid #f0f0f0;
+  border-radius: 12px;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, #fafafa 0%, #fff 48px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.sens-bind-panel-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 8px;
+}
+.sens-bind-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f1f1f;
+}
+.sens-bind-optional-tag {
+  margin: 0;
+  font-size: 12px;
+  line-height: 1.4;
+  border-radius: 4px;
+  color: #595959;
+  background: #f5f5f5;
+  border: none;
+}
+.sens-bind-panel-desc {
+  font-size: 12px;
+  color: #8c8c8c;
+  line-height: 1.55;
+  margin: 0 0 14px;
+  max-width: 52rem;
+}
+.sens-level-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (min-width: 900px) {
+  .sens-level-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.sens-level-card {
+  position: relative;
+  text-align: left;
+  border: 1px solid #e8e8e8;
+  border-radius: 10px;
+  padding: 12px 12px 12px 14px;
+  background: #fff;
+  cursor: pointer;
+  transition:
+    border-color 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
+  min-height: 72px;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  gap: 2px;
+}
+.sens-level-card:hover {
+  border-color: #91caff;
+  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.08);
+}
+.sens-level-card:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1677ff;
+}
+.sens-level-card.is-active {
+  border-color: var(--sens-accent, #1677ff);
+  background: var(--sens-bg, #e6f4ff);
+  box-shadow: 0 0 0 1px var(--sens-accent, #1677ff);
+}
+.sens-level-card-none.is-active {
+  border-color: #1677ff;
+  background: #e6f4ff;
+  box-shadow: 0 0 0 1px #1677ff;
+}
+.sens-level-dot {
+  position: absolute;
+  left: 12px;
+  top: 14px;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+.sens-level-card:not(.sens-level-card-none) {
+  padding-left: 28px;
+}
+.sens-level-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f1f1f;
+  line-height: 1.3;
+}
+.sens-level-card-hint {
+  font-size: 12px;
+  color: #8c8c8c;
+  line-height: 1.35;
+}
+.sens-level-card-none .sens-level-card-title {
+  color: #1677ff;
+}
+</style>

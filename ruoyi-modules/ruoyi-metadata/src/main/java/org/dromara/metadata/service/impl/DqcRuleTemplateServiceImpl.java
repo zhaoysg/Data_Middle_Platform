@@ -3,6 +3,8 @@ package org.dromara.metadata.service.impl;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.dromara.common.core.exception.ServiceException;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.metadata.domain.DqcRuleTemplate;
@@ -33,6 +35,11 @@ public class DqcRuleTemplateServiceImpl implements IDqcRuleTemplateService {
             .orderByDesc(DqcRuleTemplate::getCreateTime);
         var page = baseMapper.selectVoPage(pageQuery.build(), wrapper);
         return TableDataInfo.build(page);
+    }
+
+    @Override
+    public TableDataInfo<DqcRuleTemplateVo> pageTemplateList(DqcRuleTemplateVo vo, PageQuery pageQuery) {
+        return queryPageList(vo, pageQuery);
     }
 
     @Override
@@ -68,7 +75,65 @@ public class DqcRuleTemplateServiceImpl implements IDqcRuleTemplateService {
     }
 
     @Override
-    public TableDataInfo<DqcRuleTemplateVo> pageTemplateList(DqcRuleTemplateVo vo, PageQuery pageQuery) {
-        return queryPageList(vo, pageQuery);
+    public int deleteTemplate(List<Long> ids) {
+        return baseMapper.deleteBatchIds(ids);
+    }
+
+    @Override
+    public Long insertTemplate(DqcRuleTemplateVo vo) {
+        if (StringUtils.isNotBlank(vo.getTemplateCode())) {
+            boolean exist = baseMapper.exists(Wrappers.<DqcRuleTemplate>lambdaQuery()
+                .eq(DqcRuleTemplate::getTemplateCode, vo.getTemplateCode()));
+            if (exist) {
+                throw new ServiceException("模板编码已存在");
+            }
+        }
+        DqcRuleTemplate entity = new DqcRuleTemplate();
+        entity.setTemplateCode(vo.getTemplateCode());
+        entity.setTemplateName(vo.getTemplateName());
+        entity.setTemplateDesc(vo.getTemplateDesc());
+        entity.setRuleType(vo.getRuleType());
+        entity.setApplyLevel(vo.getApplyLevel());
+        entity.setDefaultExpr(vo.getDefaultExpr());
+        entity.setThresholdJson(vo.getThresholdJson());
+        entity.setParamSpec(vo.getParamSpec());
+        entity.setDimension(vo.getDimension());
+        entity.setBuiltin(vo.getBuiltin() != null ? vo.getBuiltin() : "0");
+        entity.setEnabled(vo.getEnabled() != null ? vo.getEnabled() : "0");
+        baseMapper.insert(entity);
+        return entity.getId();
+    }
+
+    @Override
+    public int updateTemplate(DqcRuleTemplateVo vo) {
+        if (vo.getId() == null) {
+            throw new ServiceException("模板ID不能为空");
+        }
+        if (StringUtils.isNotBlank(vo.getTemplateCode())) {
+            boolean exist = baseMapper.exists(Wrappers.<DqcRuleTemplate>lambdaQuery()
+                .eq(DqcRuleTemplate::getTemplateCode, vo.getTemplateCode())
+                .ne(DqcRuleTemplate::getId, vo.getId()));
+            if (exist) {
+                throw new ServiceException("模板编码已存在");
+            }
+        }
+        DqcRuleTemplate entity = new DqcRuleTemplate();
+        entity.setId(vo.getId());
+        entity.setTemplateCode(vo.getTemplateCode());
+        entity.setTemplateName(vo.getTemplateName());
+        entity.setTemplateDesc(vo.getTemplateDesc());
+        entity.setRuleType(vo.getRuleType());
+        entity.setApplyLevel(vo.getApplyLevel());
+        entity.setDefaultExpr(vo.getDefaultExpr());
+        entity.setThresholdJson(vo.getThresholdJson());
+        entity.setParamSpec(vo.getParamSpec());
+        entity.setDimension(vo.getDimension());
+        if (vo.getBuiltin() != null) {
+            entity.setBuiltin(vo.getBuiltin());
+        }
+        if (vo.getEnabled() != null) {
+            entity.setEnabled(vo.getEnabled());
+        }
+        return baseMapper.updateById(entity);
     }
 }

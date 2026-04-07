@@ -125,6 +125,11 @@ public class DqcRuleDefBo extends BaseEntity implements Serializable {
     private String errorLevel;
 
     /**
+     * 规则强度：STRONG-强规则 / WEAK-弱规则
+     */
+    private String ruleStrength;
+
+    /**
      * 告警通知人
      */
     private String alertReceivers;

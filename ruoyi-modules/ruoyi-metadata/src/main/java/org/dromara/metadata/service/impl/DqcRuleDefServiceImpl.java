@@ -55,10 +55,13 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
         validateRuleDefinition(bo);
         DqcRuleDef entity = MapstructUtils.convert(bo, DqcRuleDef.class);
         if (entity.getEnabled() == null) {
-            entity.setEnabled("1");
+            entity.setEnabled("0");
         }
         if (entity.getErrorLevel() == null) {
             entity.setErrorLevel("MEDIUM");
+        }
+        if (entity.getRuleStrength() == null) {
+            entity.setRuleStrength("WEAK");
         }
         baseMapper.insert(entity);
         return entity.getId();

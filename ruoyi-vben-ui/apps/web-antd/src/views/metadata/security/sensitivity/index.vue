@@ -7,6 +7,7 @@ import type { SecColumnSensitivity } from '#/api/metadata/model';
 import { PlayCircleOutlined } from '@ant-design/icons-vue';
 import { Page } from '@vben/common-ui';
 import { Button, Space, Tag, message } from 'ant-design-vue';
+import { h } from 'vue';
 
 import { useVbenVxeGrid } from '#/adapter/vxe-table';
 import { datasourceEnabled } from '#/api/system/datasource';

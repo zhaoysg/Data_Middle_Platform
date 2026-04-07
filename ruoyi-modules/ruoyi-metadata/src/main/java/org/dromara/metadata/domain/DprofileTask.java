@@ -56,6 +56,11 @@ public class DprofileTask extends BaseEntity implements Serializable {
     private String tablePattern;
 
     /**
+     * 指定探查的列名（逗号分隔，留空表示全部列）
+     */
+    private String targetColumns;
+
+    /**
      * 触发方式：MANUAL/SCHEDULE/API
      */
     private String triggerType;

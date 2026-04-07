@@ -187,6 +187,7 @@ CREATE TABLE `dqc_rule_def` (
   `fluctuation_threshold` decimal(5,2) DEFAULT NULL COMMENT '波动阈值百分比',
   `regex_pattern` varchar(500) DEFAULT NULL COMMENT '正则表达式',
   `error_level` varchar(20) NOT NULL DEFAULT 'MEDIUM' COMMENT '错误级别 LOW/MEDIUM/HIGH/CRITICAL',
+  `rule_strength` varchar(10) DEFAULT 'WEAK' COMMENT '规则强度：STRONG-强规则/WEAK-弱规则',
   `alert_receivers` varchar(500) DEFAULT NULL COMMENT '告警接收人，多个逗号分隔',
   `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
   `enabled` char(1) NOT NULL DEFAULT '1' COMMENT '是否启用',

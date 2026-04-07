@@ -52,4 +52,32 @@ public class DqcRuleTemplateController extends BaseController {
     public R<List<DqcRuleTemplateVo>> listByDimension(@PathVariable String dimension) {
         return R.ok(templateService.listByDimension(dimension));
     }
+
+    /**
+     * 新增模板
+     */
+    @SaCheckPermission("metadata:dqc:template:add")
+    @PostMapping
+    public R<Void> add(@Validated @RequestBody DqcRuleTemplateVo vo) {
+        templateService.insertTemplate(vo);
+        return R.ok();
+    }
+
+    /**
+     * 修改模板
+     */
+    @SaCheckPermission("metadata:dqc:template:edit")
+    @PutMapping
+    public R<Void> edit(@Validated @RequestBody DqcRuleTemplateVo vo) {
+        return toAjax(templateService.updateTemplate(vo));
+    }
+
+    /**
+     * 删除模板
+     */
+    @SaCheckPermission("metadata:dqc:template:remove")
+    @DeleteMapping("/{ids}")
+    public R<Void> remove(@PathVariable List<Long> ids) {
+        return toAjax(templateService.deleteTemplate(ids));
+    }
 }

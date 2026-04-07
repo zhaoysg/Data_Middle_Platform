@@ -30,6 +30,31 @@ public class SecClassificationVo implements Serializable {
 
     private Integer sortOrder;
 
+    /**
+     * 默认关联敏感等级编码
+     */
+    private String defaultLevelCode;
+
+    /**
+     * 等级名称（列表展示，非表字段）
+     */
+    private String defaultLevelName;
+
+    /**
+     * 等级颜色（列表 Tag，非表字段）
+     */
+    private String defaultLevelColor;
+
+    /**
+     * 指向该分类的敏感识别规则数量（聚合，非表字段）
+     */
+    private Long ruleCount;
+
+    /**
+     * 该分类下的敏感字段记录数量（聚合，非表字段）
+     */
+    private Long fieldCount;
+
     private String enabled;
 
     private LocalDateTime createTime;

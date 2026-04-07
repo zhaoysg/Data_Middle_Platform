@@ -1,7 +1,6 @@
 package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
-import cn.hutool.core.util.StrUtil;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -25,7 +24,10 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.Duration;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
@@ -66,6 +68,7 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
         task.setTablePattern(bo.getTablePattern());
         task.setTriggerType(bo.getTriggerType() != null ? bo.getTriggerType() : "MANUAL");
         task.setCronExpr(bo.getCronExpr());
+        task.setTargetColumns(bo.getTargetColumns());
         task.setStatus("DRAFT");
         task.setTotalTables(0);
 
@@ -99,6 +102,7 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
         task.setTablePattern(bo.getTablePattern());
         task.setTriggerType(bo.getTriggerType());
         task.setCronExpr(bo.getCronExpr());
+        task.setTargetColumns(bo.getTargetColumns());
 
         taskMapper.updateById(task);
         log.info("更新探查任务成功: id={}", task.getId());
@@ -206,11 +210,15 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
                 matchedTables = matchedTables.subList(0, maxTables);
             }
 
-            // 4. Analyze each table
+            // 4. Parse targetColumns from comma-separated string
+            Set<String> targetCols = parseTargetColumns(task.getTargetColumns());
+
+            // 5. Analyze each table with column filter
             List<Long> reportIds = dprofileService.analyzeTables(
                 task.getDsId(),
                 matchedTables,
-                task.getProfileLevel()
+                task.getProfileLevel(),
+                targetCols
             );
 
             // 5. Update task status
@@ -224,8 +232,9 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
 
             taskMapper.updateById(task);
 
-            log.info("探查任务执行完成: id={}, 耗时={}ms, 处理表数={}, 报告数={}",
-                taskId, elapsedMs, matchedTables.size(), reportIds.size());
+            log.info("探查任务执行完成: id={}, 耗时={}ms, 处理表数={}, 报告数={}, 指定列数={}",
+                taskId, elapsedMs, matchedTables.size(), reportIds.size(),
+                targetCols.isEmpty() ? "全部" : targetCols.size());
 
         } catch (Exception e) {
             log.error("探查任务执行失败: id={}, error={}", taskId, e.getMessage(), e);
@@ -251,7 +260,6 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
             return tables;
         }
 
-        // Convert wildcard pattern to regex
         String regex = pattern
             .replace("*", ".*")
             .replace("?", ".");
@@ -261,6 +269,22 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
         return tables.stream()
             .filter(table -> compiledPattern.matcher(table).matches())
             .collect(Collectors.toList());
+    }
+
+    /**
+     * 解析逗号分隔的列名字符串为 Set
+     *
+     * @param targetColumns 逗号分隔的列名，如 "id,name,email"
+     * @return 列名集合，空串或 null 返回空集合
+     */
+    private Set<String> parseTargetColumns(String targetColumns) {
+        if (StringUtils.isBlank(targetColumns)) {
+            return new HashSet<>();
+        }
+        return Arrays.stream(targetColumns.split(","))
+            .map(String::trim)
+            .filter(s -> !s.isEmpty())
+            .collect(Collectors.toCollection(HashSet::new));
     }
 
     /**

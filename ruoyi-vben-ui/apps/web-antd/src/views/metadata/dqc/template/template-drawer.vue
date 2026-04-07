@@ -2,7 +2,7 @@
 import { computed, ref, watch } from 'vue';
 
 import { useVbenDrawer } from '@vben/common-ui';
-import { Form, Input, Select, message } from 'ant-design-vue';
+import { Form, Input, Select, message, Tag } from 'ant-design-vue';
 import { PlusOutlined, DeleteOutlined, SyncOutlined } from '@ant-design/icons-vue';
 
 import {
@@ -566,74 +566,156 @@ const previewExpr = computed(() => {
       <!-- Step 2: 预览保存 -->
       <template #step-2>
         <div class="space-y-4">
-          <div class="text-sm text-gray-500 mb-2">请确认以下配置信息，确认无误后点击保存。</div>
-          <Form :model="formValues" layout="vertical" class="bg-gray-50 rounded-lg p-4">
-            <div class="text-base font-medium mb-4 text-gray-800">基本信息</div>
-            <div class="grid grid-cols-2 gap-y-3">
-              <div>
-                <span class="text-gray-500">模板名称：</span>
-                <span>{{ formValues.templateName || '-' }}</span>
+          <div class="text-sm text-gray-500">请确认以下配置信息，确认无误后点击保存。</div>
+
+          <!-- 基本信息： bordered 描述列表样式 -->
+          <div
+            class="overflow-hidden rounded-lg border border-gray-200 bg-white text-sm shadow-sm"
+          >
+            <div class="border-b border-gray-100 px-4 py-3 text-base font-semibold text-gray-900">
+              基本信息
+            </div>
+            <div class="divide-y divide-gray-100">
+              <div class="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div class="flex min-h-[44px]">
+                  <div
+                    class="flex w-[108px] shrink-0 items-center border-gray-100 bg-[#fafafa] px-3 py-2.5 text-gray-500 sm:border-r"
+                  >
+                    模板名称：
+                  </div>
+                  <div class="flex min-w-0 flex-1 items-center px-3 py-2.5 text-gray-900">
+                    {{ formValues.templateName || '-' }}
+                  </div>
+                </div>
+                <div class="flex min-h-[44px]">
+                  <div
+                    class="flex w-[108px] shrink-0 items-center border-gray-100 bg-[#fafafa] px-3 py-2.5 text-gray-500 sm:border-r"
+                  >
+                    模板编码：
+                  </div>
+                  <div class="flex min-w-0 flex-1 items-center px-3 py-2.5 text-gray-900">
+                    {{ formValues.templateCode || '-' }}
+                  </div>
+                </div>
               </div>
-              <div>
-                <span class="text-gray-500">模板编码：</span>
-                <span>{{ formValues.templateCode || '-' }}</span>
+              <div class="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div class="flex min-h-[44px]">
+                  <div
+                    class="flex w-[108px] shrink-0 items-center border-gray-100 bg-[#fafafa] px-3 py-2.5 text-gray-500 sm:border-r"
+                  >
+                    质量维度：
+                  </div>
+                  <div class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
+                    <Tag v-if="formValues.dimension" color="success" class="m-0">
+                      {{ dimensionLabel }}
+                    </Tag>
+                    <span v-else class="text-gray-900">-</span>
+                  </div>
+                </div>
+                <div class="flex min-h-[44px]">
+                  <div
+                    class="flex w-[108px] shrink-0 items-center border-gray-100 bg-[#fafafa] px-3 py-2.5 text-gray-500 sm:border-r"
+                  >
+                    规则类型：
+                  </div>
+                  <div class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
+                    <Tag v-if="formValues.ruleType" color="processing" class="m-0">
+                      {{ ruleTypeLabel }}
+                    </Tag>
+                    <span v-else class="text-gray-900">-</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span class="text-gray-500">质量维度：</span>
-                <span>{{ dimensionLabel }}</span>
+              <div class="grid grid-cols-1 divide-y divide-gray-100 sm:grid-cols-2 sm:divide-x sm:divide-y-0">
+                <div class="flex min-h-[44px]">
+                  <div
+                    class="flex w-[108px] shrink-0 items-center border-gray-100 bg-[#fafafa] px-3 py-2.5 text-gray-500 sm:border-r"
+                  >
+                    适用级别：
+                  </div>
+                  <div class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
+                    <Tag v-if="formValues.applyLevel" class="m-0">{{ applyLevelLabel }}</Tag>
+                    <span v-else class="text-gray-900">-</span>
+                  </div>
+                </div>
+                <div class="flex min-h-[44px]">
+                  <div
+                    class="flex w-[108px] shrink-0 items-center border-gray-100 bg-[#fafafa] px-3 py-2.5 text-gray-500 sm:border-r"
+                  >
+                    状态：
+                  </div>
+                  <div class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
+                    <Tag
+                      v-if="formValues.enabled !== undefined && formValues.enabled !== null"
+                      :color="formValues.enabled === '0' ? 'success' : 'default'"
+                      class="m-0"
+                    >
+                      {{ enabledLabel }}
+                    </Tag>
+                    <span v-else class="text-gray-900">-</span>
+                  </div>
+                </div>
               </div>
-              <div>
-                <span class="text-gray-500">规则类型：</span>
-                <span>{{ ruleTypeLabel }}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">适用级别：</span>
-                <span>{{ applyLevelLabel }}</span>
-              </div>
-              <div>
-                <span class="text-gray-500">状态：</span>
-                <span>{{ enabledLabel }}</span>
-              </div>
-              <div class="col-span-2">
-                <span class="text-gray-500">模板描述：</span>
-                <span>{{ formValues.templateDesc || '-' }}</span>
+              <div class="flex min-h-[44px]">
+                <div
+                  class="flex w-[108px] shrink-0 items-start bg-[#fafafa] px-3 py-2.5 text-gray-500 sm:items-center sm:border-r sm:border-gray-100"
+                >
+                  模板描述：
+                </div>
+                <div
+                  class="min-w-0 flex-1 whitespace-pre-wrap px-3 py-2.5 leading-relaxed text-gray-900"
+                >
+                  {{ formValues.templateDesc || '-' }}
+                </div>
               </div>
             </div>
+          </div>
 
-            <div class="text-base font-medium my-4 text-gray-800">规则表达式</div>
+          <div class="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div class="mb-3 text-base font-semibold text-gray-900">规则表达式</div>
             <div class="space-y-2">
               <div class="text-sm font-medium text-gray-600">默认表达式：</div>
-              <pre class="bg-white border border-gray-200 rounded p-3 text-xs text-gray-700 whitespace-pre-wrap overflow-auto max-h-32">{{ formValues.defaultExpr || '-' }}</pre>
+              <pre
+                class="max-h-32 overflow-auto whitespace-pre-wrap rounded-md border border-gray-100 bg-[#fafafa] p-3 text-xs text-gray-800"
+                >{{ formValues.defaultExpr || '-' }}</pre
+              >
               <div v-if="formValues.thresholdJson">
-                <div class="text-sm font-medium text-gray-600 mt-2">阈值配置：</div>
-                <pre class="bg-white border border-gray-200 rounded p-3 text-xs text-gray-700 whitespace-pre-wrap">{{ formValues.thresholdJson }}</pre>
+                <div class="mt-2 text-sm font-medium text-gray-600">阈值配置：</div>
+                <pre
+                  class="whitespace-pre-wrap rounded-md border border-gray-100 bg-[#fafafa] p-3 text-xs text-gray-800"
+                  >{{ formValues.thresholdJson }}</pre
+                >
               </div>
             </div>
+          </div>
 
-            <div v-if="paramList.length > 0" class="text-base font-medium my-4 text-gray-800">
+          <div v-if="paramList.length > 0" class="overflow-hidden rounded-lg border border-gray-200 bg-white p-4 shadow-sm">
+            <div class="mb-3 text-base font-semibold text-gray-900">
               参数规格（共 {{ paramList.length }} 个）
             </div>
-            <div v-if="paramList.length > 0" class="space-y-2">
+            <div class="space-y-2">
               <div
                 v-for="(param, index) in paramList"
                 :key="index"
-                class="bg-white border border-gray-200 rounded p-3 text-sm"
+                class="rounded-md border border-gray-100 bg-[#fafafa] p-3 text-sm"
               >
                 <div class="flex justify-between">
-                  <span class="font-medium">
-                    <code class="bg-gray-100 px-1 rounded mr-1">{{ '${param.' + param.name + '}' }}</code>
+                  <span class="font-medium text-gray-900">
+                    <code class="mr-1 rounded bg-white px-1 text-gray-800">{{
+                      '${param.' + param.name + '}'
+                    }}</code>
                     {{ param.description || param.name }}
                   </span>
-                  <span class="text-gray-400">{{ param.type }}</span>
+                  <span class="text-gray-500">{{ param.type }}</span>
                 </div>
-                <div class="text-gray-500 text-xs mt-1">
+                <div class="mt-1 text-xs text-gray-500">
                   <span>默认值: {{ param.defaultValue || '(无)' }}；</span>
                   <span v-if="param.required" class="text-red-500">必填</span>
                   <span v-else>选填</span>
                 </div>
               </div>
             </div>
-          </Form>
+          </div>
         </div>
       </template>
     </WizardDrawer>

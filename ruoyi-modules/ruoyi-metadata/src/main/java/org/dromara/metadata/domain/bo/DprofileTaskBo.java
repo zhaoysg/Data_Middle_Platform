@@ -2,6 +2,7 @@ package org.dromara.metadata.domain.bo;
 
 import io.github.linpeilie.annotations.AutoMapper;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 import lombok.Data;
 import lombok.NoArgsConstructor;
@@ -42,7 +43,7 @@ public class DprofileTaskBo implements Serializable {
     /**
      * 关联数据源ID
      */
-    @NotBlank(message = "数据源ID不能为空")
+    @NotNull(message = "数据源ID不能为空")
     private Long dsId;
 
     /**
@@ -56,6 +57,12 @@ public class DprofileTaskBo implements Serializable {
      */
     @Size(max = 500, message = "表名匹配模式长度不能超过{max}个字符")
     private String tablePattern;
+
+    /**
+     * 指定探查的列名（逗号分隔，留空表示全部列）
+     */
+    @Size(max = 4000, message = "指定列名字符串长度不能超过{max}个字符")
+    private String targetColumns;
 
     /**
      * 触发方式：MANUAL/SCHEDULE/API

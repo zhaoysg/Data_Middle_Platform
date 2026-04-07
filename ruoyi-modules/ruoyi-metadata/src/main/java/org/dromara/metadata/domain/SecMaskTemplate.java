@@ -40,9 +40,34 @@ public class SecMaskTemplate extends BaseEntity implements Serializable {
     private String templateType;
 
     /**
-     * 脱敏表达式 如 MASK(name, '*', 3, 4)
+     * 脱敏表达式/SQL 片段（执行层，可选）
      */
     private String maskExpr;
+
+    /**
+     * 掩码字符，默认 *
+     */
+    private String maskChar;
+
+    /**
+     * 遮蔽位置：ALL/HEAD/TAIL/CENTER
+     */
+    private String maskPosition;
+
+    /**
+     * 掩码时保留头部字符数
+     */
+    private Integer maskHeadKeep;
+
+    /**
+     * 掩码时保留尾部字符数
+     */
+    private Integer maskTailKeep;
+
+    /**
+     * 掩码正则或高级替换说明（与 bgdata maskPattern 对齐）
+     */
+    private String maskPattern;
 
     /**
      * 模板描述

@@ -40,4 +40,19 @@ public interface IDqcRuleTemplateService {
      * 获取模板详情
      */
     DqcRuleTemplateVo getTemplateById(Long id);
+
+    /**
+     * 新增模板
+     */
+    Long insertTemplate(DqcRuleTemplateVo vo);
+
+    /**
+     * 修改模板
+     */
+    int updateTemplate(DqcRuleTemplateVo vo);
+
+    /**
+     * 删除模板
+     */
+    int deleteTemplate(List<Long> ids);
 }
