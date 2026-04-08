@@ -5,6 +5,7 @@ import { Page } from '@vben/common-ui';
 import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 import {
   Badge,
+  Button,
   Card,
   Col,
   Descriptions,
@@ -36,6 +37,18 @@ const executionData = ref<DqcExecution[]>([]);
 // Filter (detail tab)
 const filterLayer = ref<string>('');
 const filterStatus = ref<string>('');
+const dayOptions = [
+  { label: '近 7 天', value: 7 },
+  { label: '近 14 天', value: 14 },
+  { label: '近 30 天', value: 30 },
+  { label: '近 90 天', value: 90 },
+];
+const executionStatusOptions = [
+  { label: '成功', value: 'SUCCESS' },
+  { label: '失败', value: 'FAILED' },
+  { label: '部分失败', value: 'PARTIAL' },
+  { label: '运行中', value: 'RUNNING' },
+];
 
 // Chart refs
 const gaugeRef = ref<EchartsUIType>();
@@ -97,7 +110,7 @@ function getStatusLabel(status?: string) {
 function avg(list: DqcQualityScore[], field: keyof DqcQualityScore): number {
   const vals = list
     .map((r) => r[field])
-    .filter((v): v is number => v !== undefined && v !== null);
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   if (vals.length === 0) return 0;
   return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
 }
@@ -106,7 +119,7 @@ function avgExec(list: DqcExecution[], field: keyof DqcExecution): number {
   const vals = list
     .filter((r) => r.status !== 'RUNNING')
     .map((r) => r[field])
-    .filter((v): v is number => v !== undefined && v !== null);
+    .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   if (vals.length === 0) return 0;
   return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
 }
@@ -504,13 +517,13 @@ onMounted(() => {
           </div>
         </div>
         <div class="dq-header-right">
-          <a-select v-model="days" style="width: 120px" @change="loadData">
-            <a-select-option :value="7">近 7 天</a-select-option>
-            <a-select-option :value="14">近 14 天</a-select-option>
-            <a-select-option :value="30">近 30 天</a-select-option>
-            <a-select-option :value="90">近 90 天</a-select-option>
-          </a-select>
-          <a-button type="primary" @click="loadData">刷新</a-button>
+          <Select
+            v-model:value="days"
+            :options="dayOptions"
+            style="width: 120px"
+            @change="loadData"
+          />
+          <Button type="primary" @click="loadData">刷新</Button>
         </div>
       </div>
 
@@ -915,19 +928,26 @@ onMounted(() => {
           <Row :gutter="16" align="middle">
             <Col>
               <span class="filter-label">数仓层级：</span>
-              <a-select v-model="filterLayer" style="width: 130px" placeholder="全部" allow-clear :options="layerOptions"/>
+              <Select
+                v-model:value="filterLayer"
+                style="width: 130px"
+                placeholder="全部"
+                allow-clear
+                :options="layerOptions"
+              />
             </Col>
             <Col>
               <span class="filter-label">执行状态：</span>
-              <a-select v-model="filterStatus" style="width: 130px" placeholder="全部" allow-clear>
-                <a-select-option value="SUCCESS">成功</a-select-option>
-                <a-select-option value="FAILED">失败</a-select-option>
-                <a-select-option value="PARTIAL">部分失败</a-select-option>
-                <a-select-option value="RUNNING">运行中</a-select-option>
-              </a-select>
+              <Select
+                v-model:value="filterStatus"
+                style="width: 130px"
+                placeholder="全部"
+                allow-clear
+                :options="executionStatusOptions"
+              />
             </Col>
             <Col>
-              <a-button @click="() => { filterLayer = ''; filterStatus = '' }">重置</a-button>
+              <Button @click="() => { filterLayer = ''; filterStatus = '' }">重置</Button>
             </Col>
             <Col style="margin-left: auto">
               <span style="font-size: 13px; color: #8c8c8c">

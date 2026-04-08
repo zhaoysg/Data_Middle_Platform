@@ -389,10 +389,12 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       if (id) {
         recordId.value = id;
         const info = await dprofileTaskInfo(id);
-        formValues.value = {
-          ...info,
-          _tableFilter: '',
-        };
+        formValues.value = Object.fromEntries(
+          Object.entries({ ...info })
+            .filter(([, v]) => v !== undefined && v !== null)
+            .map(([k, v]) => [k, v === 'undefined' ? '' : v]),
+        ) as any;
+        formValues.value._tableFilter = '';
         taskNameTouched.value = true;
         // 回显已选列
         selectedTargetColumns.value = new Set(

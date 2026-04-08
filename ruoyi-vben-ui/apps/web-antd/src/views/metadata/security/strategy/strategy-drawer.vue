@@ -43,7 +43,11 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       if (id) {
         recordId.value = id;
         const info = await secMaskStrategyInfo(id);
-        formValues.value = { ...info };
+        formValues.value = Object.fromEntries(
+          Object.entries({ ...info })
+            .filter(([, v]) => v !== undefined && v !== null)
+            .map(([k, v]) => [k, v === 'undefined' ? '' : v]),
+        );
       } else {
         recordId.value = undefined;
         formValues.value = {

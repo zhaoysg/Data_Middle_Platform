@@ -6,7 +6,7 @@ import type { VxeGridProps } from '#/adapter/vxe-table';
 import { PlusOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Popconfirm, Space, Tag, Tree } from 'ant-design-vue';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
@@ -115,7 +115,7 @@ function handleAdd() {
 }
 
 function handleEdit(record: any) {
-  drawerApi.setData({ id: record.id });
+  drawerApi.setData({ ...record });
   drawerApi.open();
 }
 

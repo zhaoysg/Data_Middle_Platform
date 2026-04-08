@@ -109,7 +109,11 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
         recordId.value = id;
         const info = await secMaskTemplateInfo(id);
         formValues.value = {
-          ...info,
+          ...Object.fromEntries(
+            Object.entries({ ...info })
+              .filter(([, v]) => v !== undefined && v !== null)
+              .map(([k, v]) => [k, v === 'undefined' ? '' : v]),
+          ),
           maskChar: info.maskChar ?? '*',
           maskPosition: info.maskPosition ?? 'CENTER',
           maskHeadKeep: info.maskHeadKeep ?? 3,
@@ -125,6 +129,10 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
           maskPosition: 'CENTER',
           maskHeadKeep: 3,
           maskTailKeep: 4,
+          templateType: undefined,
+          templateName: '',
+          templateCode: '',
+          templateDesc: '',
           maskPattern: '',
           maskExpr: '',
         };

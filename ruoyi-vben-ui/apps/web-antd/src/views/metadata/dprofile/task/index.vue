@@ -178,27 +178,43 @@ function handleEdit(record: DprofileTask) {
 }
 
 async function handleStart(row: DprofileTask) {
-  await dprofileTaskStart(row.id!);
-  await tableApi.query();
+  try {
+    await dprofileTaskStart(row.id!);
+    await tableApi.query();
+  } catch {
+    // requestClient 已统一提示，这里拦截异常避免组件事件未处理告警
+  }
 }
 
 async function handleStop(row: DprofileTask) {
-  await dprofileTaskStop(row.id!);
-  await tableApi.query();
+  try {
+    await dprofileTaskStop(row.id!);
+    await tableApi.query();
+  } catch {
+    // requestClient 已统一提示，这里拦截异常避免组件事件未处理告警
+  }
 }
 
 async function handleDelete(row: DprofileTask) {
-  await dprofileTaskRemove([row.id!]);
-  await tableApi.query();
+  try {
+    await dprofileTaskRemove([row.id!]);
+    await tableApi.query();
+  } catch {
+    // requestClient 已统一提示，这里拦截异常避免组件事件未处理告警
+  }
 }
 
 async function handleMultiDelete() {
-  const rows = tableApi.grid.getCheckboxRecords();
-  const ids = rows
-    .map((row: DprofileTask) => row.id)
-    .filter((id): id is number => id !== undefined);
-  await dprofileTaskRemove(ids);
-  await tableApi.query();
+  try {
+    const rows = tableApi.grid.getCheckboxRecords();
+    const ids = rows
+      .map((row: DprofileTask) => row.id)
+      .filter((id): id is number => id !== undefined);
+    await dprofileTaskRemove(ids);
+    await tableApi.query();
+  } catch {
+    // requestClient 已统一提示，这里拦截异常避免组件事件未处理告警
+  }
 }
 </script>
 

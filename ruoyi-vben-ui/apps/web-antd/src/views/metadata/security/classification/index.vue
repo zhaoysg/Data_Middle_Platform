@@ -6,11 +6,11 @@ import type { SecClassification } from '#/api/metadata/model';
 
 import { PlusOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { Popconfirm, Space, Tag } from 'ant-design-vue';
+import { Popconfirm, Skeleton, Space, Tag } from 'ant-design-vue';
+import { ref } from 'vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  secClassificationAdd,
   secClassificationList,
   secClassificationRemove,
   secClassificationUpdate,
@@ -88,7 +88,7 @@ const gridOptions: VxeGridProps = {
           const rows = (data?.rows ?? []) as SecClassification[];
           statsData.value = {
             total: data?.total ?? rows.length,
-            enabled: rows.filter((r) => r.enabled === '1').length,
+            enabled: rows.filter((r) => r.enabled === '0').length,
             rules: rows.reduce((s, r) => s + (r.ruleCount ?? 0), 0),
             fields: rows.reduce((s, r) => s + (r.fieldCount ?? 0), 0),
           };
@@ -172,28 +172,28 @@ function fmt(n: number | undefined) {
     <div class="clsf-stats">
       <div class="clsf-stat-card clsf-stat-card--purple">
         <div class="clsf-stat-value">
-          <a-skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
+          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
           <span v-else>{{ statsData.total }}</span>
         </div>
         <div class="clsf-stat-label">分类总数</div>
       </div>
       <div class="clsf-stat-card clsf-stat-card--green">
         <div class="clsf-stat-value">
-          <a-skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
+          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
           <span v-else>{{ statsData.enabled }}</span>
         </div>
         <div class="clsf-stat-label">启用分类</div>
       </div>
       <div class="clsf-stat-card clsf-stat-card--blue">
         <div class="clsf-stat-value">
-          <a-skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
+          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
           <span v-else>{{ statsData.rules }}</span>
         </div>
         <div class="clsf-stat-label">关联规则总数</div>
       </div>
       <div class="clsf-stat-card clsf-stat-card--orange">
         <div class="clsf-stat-value">
-          <a-skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
+          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
           <span v-else>{{ statsData.fields }}</span>
         </div>
         <div class="clsf-stat-label">敏感字段总数</div>

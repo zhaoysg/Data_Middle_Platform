@@ -47,7 +47,12 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       if (id) {
         recordId.value = id;
         const info = await secClassificationInfo(id);
-        formValues.value = { ...info };
+        // 防御性清理：过滤掉 undefined/null 值，防止显示 "undefined" 字符串
+        formValues.value = Object.fromEntries(
+          Object.entries({ ...info })
+            .filter(([, v]) => v !== undefined && v !== null)
+            .map(([k, v]) => [k, v === 'undefined' ? '' : v]),
+        );
       } else {
         recordId.value = undefined;
         formValues.value = {

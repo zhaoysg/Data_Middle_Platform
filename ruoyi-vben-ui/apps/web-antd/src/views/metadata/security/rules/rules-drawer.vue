@@ -163,9 +163,10 @@ async function loadClassificationOptions() {
 
 watch(
   () => formValues.value.ruleType,
-  () => {
-    if (!formValues.value.ruleExpr) {
-      formValues.value.ruleExpr = '';
+  (type) => {
+    // 仅在新建时自动用示例填充，编辑场景下保护已加载的表达式
+    if (!isEdit.value && type && !formValues.value._ruleExprLoaded) {
+      formValues.value.ruleExpr = ruleExprExamples[type] || '';
     }
   },
 );
@@ -198,7 +199,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       if (id) {
         recordId.value = id;
         const info = await secSensitivityRuleInfo(id);
-        formValues.value = { ...info, _nameTouched: true };
+        formValues.value = { ...info, _nameTouched: true, _ruleExprLoaded: true };
       } else {
         recordId.value = undefined;
         formValues.value = {

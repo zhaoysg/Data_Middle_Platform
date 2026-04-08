@@ -6,10 +6,11 @@ import type { VxeGridProps } from '#/adapter/vxe-table';
 import { PlusOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
 import { Popconfirm, Space, Tag, Tree } from 'ant-design-vue';
-import { ref } from 'vue';
+import { onMounted, ref } from 'vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
+  glossaryCategoryList,
   glossaryCategoryAdd,
   glossaryCategoryRemove,
   glossaryCategoryTree,
@@ -70,7 +71,7 @@ const gridOptions: VxeGridProps = {
   proxyConfig: {
     ajax: {
       query: async ({ page, form }: any) => {
-        const data = await glossaryCategoryAdd({ ...form, pageNum: page?.currentPage, pageSize: page?.pageSize });
+        const data = await glossaryCategoryList({ ...form, pageNum: page?.currentPage, pageSize: page?.pageSize });
         return data || { rows: [], total: 0 };
       },
     },
@@ -89,7 +90,7 @@ function handleAdd() {
 }
 
 function handleEdit(record: any) {
-  drawerApi.setData({ id: record.id });
+  drawerApi.setData({ ...record });
   drawerApi.open();
 }
 
