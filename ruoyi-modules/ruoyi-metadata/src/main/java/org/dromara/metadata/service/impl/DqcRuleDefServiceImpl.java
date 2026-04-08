@@ -40,8 +40,12 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
 
     @Override
     public TableDataInfo<DqcRuleDefVo> pageRuleList(DqcRuleDefBo bo, PageQuery pageQuery) {
+        log.info("[DQC] 规则分页查询参数 - targetDsId={}, enabled={}, ruleName={}, ruleCode={}, page={}/{}",
+                bo.getTargetDsId(), bo.getEnabled(), bo.getRuleName(), bo.getRuleCode(),
+                pageQuery.getPageNum(), pageQuery.getPageSize());
         Wrapper<DqcRuleDef> wrapper = buildQueryWrapper(bo);
         var page = baseMapper.selectVoPage(pageQuery.build(), wrapper);
+        log.info("[DQC] 规则查询结果 - total={}, records={}", page.getTotal(), page.getRecords().size());
         return TableDataInfo.build(page);
     }
 
@@ -202,7 +206,9 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
 
     private void applyAccessibleDatasourceFilter(LambdaQueryWrapper<DqcRuleDef> wrapper, Long targetDsId) {
         List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(targetDsId);
+        log.info("[DQC] 规则列表查询 - targetDsId={}, 可访问数据源IDs={}", targetDsId, accessibleDsIds);
         if (accessibleDsIds.isEmpty()) {
+            log.warn("[DQC] 可访问数据源列表为空，将使用 id=-1 条件（结果必为空）");
             wrapper.eq(DqcRuleDef::getId, -1L);
             return;
         }

@@ -431,12 +431,66 @@ export interface SecColumnSensitivity {
   dataType?: string;
   levelCode?: string;
   levelName?: string;
+  levelColor?: string;
   classCode?: string;
+  className?: string;
+  matchRuleId?: number;
+  matchRuleName?: string;
   identifiedBy?: string; // AUTO/MANUAL
   scanTaskId?: number;
   confirmed?: string; // 0待确认 1已确认
+  confidence?: number; // 0-100
+  confidenceLabel?: string;
+  maskType?: string;
+  maskTypeLabel?: string;
+  maskPattern?: string;
+  scanBatchNo?: string;
+  scanTime?: string;
   createBy?: string;
   createTime?: string;
+}
+
+/** 敏感字段扫描参数 DTO */
+export interface SecSensitivityScanDTO {
+  dsId?: number;
+  schema?: string;
+  scanScope?: string; // ALL/SPECIFIC/LAYER
+  tableNames?: string;
+  layerCode?: string;
+  scanColumnName?: boolean;
+  scanColumnComment?: boolean;
+  scanDataType?: boolean;
+  useRegex?: boolean;
+  excludeSystemTables?: boolean;
+  sampleSize?: number;
+  enableContentScan?: boolean;
+  incremental?: boolean;
+  scanCycle?: string; // ONCE/DAILY/WEEKLY/MONTHLY
+  directScan?: boolean;
+  columnNames?: string[];
+  enableColumnNameMatch?: boolean;
+  enableColumnCommentMatch?: boolean;
+  scanMode?: string; // ALL/SINGLE_COLUMN
+}
+
+/** 敏感字段扫描结果 VO */
+export interface SecScanResultVO {
+  batchNo?: string;
+  dsId?: number;
+  dsName?: string;
+  startTime?: number;
+  endTime?: number;
+  costMs?: number;
+  totalTableCount?: number;
+  totalColumnCount?: number;
+  scannedTableCount?: number;
+  scannedColumnCount?: number;
+  foundSensitiveCount?: number;
+  newSensitiveCount?: number;
+  updatedSensitiveCount?: number;
+  status?: string; // SUCCESS/FAILED/PARTIAL
+  errorMessage?: string;
+  sensitiveFields?: SecColumnSensitivity[];
 }
 
 /** 脱敏策略 */

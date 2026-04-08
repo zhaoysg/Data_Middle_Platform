@@ -467,26 +467,50 @@ const totalBoundRules = computed(() =>
 
 // ---- 打开规则选择器 ----
 async function openRuleSelector(tableName: string, columnName: string) {
+  if (!bindDsId.value) {
+    message.warning('请先完成「绑定表范围」并选择数据源');
+    return;
+  }
   ruleSelectorTable.value = tableName;
   ruleSelectorColumn.value = columnName;
+  ruleFilterKeyword.value = '';
   ruleSelectorLoading.value = true;
   selectedRuleIds.value = [];
 
   // 获取当前列已绑定的规则 ID
   const binding = tableBindings.value.find((tb) => tb.tableName === tableName);
   if (binding?.columnRules[columnName]) {
-    selectedRuleIds.value = binding.columnRules[columnName].map((r: any) => r.ruleId);
+    selectedRuleIds.value = binding.columnRules[columnName].map(
+      (r: any) => r.ruleId ?? r.id,
+    );
   }
 
   try {
+    // 必须传 targetDsId：后端无此参数时用「可访问数据源 ID 列表」过滤；该列表在数据权限下可能为空，
+    // 会导致 SQL 恒为 id=-1，弹窗无数据。与 bgdata 一致，按当前方案数据源拉取可绑定的规则。
+    // ⚠️ 调试：先用原生 fetch 打印原始响应，确认字段值
+    const debugUrl = `/system/metadata/dqc/rule/list?pageNum=1&pageSize=10&enabled=0&targetDsId=${bindDsId.value}`;
+    console.log('[DQC] 调试 fetch URL:', debugUrl);
+    const raw = await fetch(debugUrl, { credentials: 'include' });
+    const rawJson = await raw.json();
+    console.log('[DQC] 原始响应（完整）:', JSON.stringify(rawJson));
+    console.log('[DQC] enabled 字段值示例:', rawJson?.rows?.[0]?.enabled, '| rows 总数:', rawJson?.total);
+
     const res = await dqcRuleList({
       pageNum: 1,
-      pageSize: 200,
+      pageSize: 999,
       enabled: '0',
+      targetDsId: bindDsId.value,
     });
-    allRules.value = res?.rows || res || [];
-  } catch (_) {
+    const rows = res?.rows;
+    allRules.value = Array.isArray(rows) ? rows : Array.isArray(res) ? res : [];
+    if (allRules.value.length === 0) {
+      message.info('当前数据源下无可绑定的规则，请检查规则「目标数据源」是否匹配');
+    }
+  } catch (e: any) {
     allRules.value = [];
+    console.error('[DQC] 加载规则列表异常:', e);
+    message.error(e?.message || '加载规则列表失败');
   } finally {
     ruleSelectorLoading.value = false;
   }

@@ -8,7 +8,9 @@ import org.dromara.common.core.validate.EditGroup;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.common.web.core.BaseController;
+import org.dromara.metadata.domain.dto.SecSensitivityScanDTO;
 import org.dromara.metadata.domain.vo.SecColumnSensitivityVo;
+import org.dromara.metadata.domain.vo.SecScanResultVO;
 import org.dromara.metadata.service.ISecColumnSensitivityService;
 import org.springframework.validation.annotation.Validated;
 import org.springframework.web.bind.annotation.*;
@@ -47,12 +49,12 @@ public class SecColumnSensitivityController extends BaseController {
     }
 
     /**
-     * 扫描数据源敏感字段
+     * 执行敏感字段扫描（完整参数版，对标 governance 能力）
      */
     @SaCheckPermission("metadata:security:sensitivity:add")
-    @PostMapping("/scan/{dsId}")
-    public R<Void> scanColumns(@PathVariable Long dsId) {
-        return toAjax(columnSensitivityService.scanColumns(dsId));
+    @PostMapping("/scan")
+    public R<SecScanResultVO> scanSensitiveFields(@Validated @RequestBody SecSensitivityScanDTO dto) {
+        return R.ok(columnSensitivityService.scanSensitiveFields(dto));
     }
 
     /**

@@ -1,4 +1,4 @@
-import type { SecColumnSensitivity } from '#/api/metadata/model';
+import type { SecColumnSensitivity, SecSensitivityScanDTO, SecScanResultVO } from '#/api/metadata/model';
 import type { ID, IDS, PageQuery, PageResult } from '#/api/common';
 import { requestClient } from '#/api/request';
 
@@ -29,9 +29,9 @@ export function secColumnSensitivityRemove(ids: IDS) {
   return requestClient.deleteWithMsg<void>(`${Api.root}/${ids}`);
 }
 
-/** 扫描敏感字段 */
-export function secColumnSensitivityScan(dsId: ID) {
-  return requestClient.postWithMsg<void>(Api.scan, { dsId });
+/** 执行敏感字段扫描（完整参数版） */
+export function secColumnSensitivityScan(data: SecSensitivityScanDTO) {
+  return requestClient.postWithMsg<SecScanResultVO>(Api.scan, data);
 }
 
 /** 确认敏感字段 */

@@ -10,13 +10,16 @@ import {
   InputNumber,
   Radio,
   Select,
+  Switch,
   Tag,
+  Tooltip,
   message,
 } from 'ant-design-vue';
 import {
-  BulbOutlined,
+  CheckCircleOutlined,
   EyeOutlined,
   InfoCircleOutlined,
+  QuestionCircleOutlined,
   SyncOutlined,
   UserOutlined,
 } from '@ant-design/icons-vue';
@@ -38,6 +41,20 @@ const dimensionOptions = [
   { label: '有效性', value: 'VALIDITY' },
 ];
 
+const strongRuleHelpItems = [
+  '失败时立即阻塞下游任务执行',
+  '触发告警通知',
+  '影响数据推送和数据应用',
+  '适用于：主键唯一性、重要字段非空',
+];
+
+const weakRuleHelpItems = [
+  '失败时仅记录日志和告警',
+  '不阻塞任务执行',
+  '纳入质量评分统计',
+  '适用于：数据分布检查、趋势监测',
+];
+
 const ruleTypeOptions = [
   { label: '空值检查', value: 'NULL_CHECK' },
   { label: '唯一性', value: 'UNIQUE' },
@@ -54,11 +71,6 @@ const applyLevelOptions = [
   { label: '字段级', value: 'COLUMN' },
   { label: '跨字段', value: 'CROSS_FIELD' },
   { label: '跨表', value: 'CROSS_TABLE' },
-];
-
-const enabledOptions = [
-  { label: '启用', value: '0' },
-  { label: '停用', value: '1' },
 ];
 
 const steps = [
@@ -144,6 +156,14 @@ const errorLevelMeta: Record<string, { label: string; color: string }> = {
 const errorLevelLabel = computed(
   () => errorLevelMeta[formValues.value.errorLevel || '']?.label || formValues.value.errorLevel || '-',
 );
+
+/** 状态：Switch 与后端 0=启用 / 1=停用 互转 */
+const enabledSwitch = computed({
+  get: () => formValues.value.enabled === '0',
+  set: (v: boolean) => {
+    formValues.value.enabled = v ? '0' : '1';
+  },
+});
 
 const [BasicDrawer, drawerApi] = useVbenDrawer({
   destroyOnClose: true,
@@ -546,26 +566,57 @@ function handleWizardNext() {
 
       <!-- Step 2 质量维度与强度 -->
       <template #step-2>
-        <Form :model="formValues" layout="vertical">
+        <Form :model="formValues" layout="vertical" class="dqc-rule-step3-form">
           <Form.Item label="质量维度" required>
-            <Checkbox.Group v-model:value="dimensionChecked" class="w-full">
-              <div class="grid grid-cols-3 gap-3">
-                <Checkbox v-for="opt in dimensionOptions" :key="opt.value" :value="opt.value">
-                  {{ opt.label }}
-                </Checkbox>
-              </div>
-            </Checkbox.Group>
-            <div class="text-gray-400 text-xs mt-1">至少选择一个质量维度</div>
+            <div class="dqc-dimension-panel">
+              <Checkbox.Group v-model:value="dimensionChecked" class="w-full">
+                <div class="dqc-dimension-grid">
+                  <div
+                    v-for="opt in dimensionOptions"
+                    :key="opt.value"
+                    class="dqc-dimension-cell"
+                    :class="{
+                      'dqc-dimension-cell--checked': dimensionChecked.includes(opt.value),
+                    }"
+                  >
+                    <Checkbox :value="opt.value" class="dqc-dimension-checkbox">
+                      {{ opt.label }}
+                    </Checkbox>
+                  </div>
+                </div>
+              </Checkbox.Group>
+              <div class="dqc-dimension-hint">至少选择一个质量维度</div>
+            </div>
           </Form.Item>
 
-          <div class="text-center font-semibold text-gray-800 my-4">规则强度与告警</div>
+          <div class="dqc-rule-strength-panel">
+            <div class="dqc-rule-strength-panel-title">规则强度与告警</div>
 
           <Form.Item label="规则强度">
             <Radio.Group v-model:value="formValues.ruleStrength" class="w-full">
               <div class="flex flex-col gap-3">
                 <Radio value="STRONG" class="!items-start rule-radio-strong">
                   <div>
-                    <span class="text-red-600 font-medium">强规则</span>
+                    <span class="text-red-600 font-medium inline-flex items-center gap-0.5">
+                      强规则
+                      <Tooltip
+                        placement="topLeft"
+                        :overlay-inner-style="{ maxWidth: '300px' }"
+                      >
+                        <template #title>
+                          <ul class="rule-strength-tooltip-list">
+                            <li v-for="(line, i) in strongRuleHelpItems" :key="i">{{ line }}</li>
+                          </ul>
+                        </template>
+                        <span
+                          class="rule-strength-help-trigger"
+                          tabindex="0"
+                          @click.stop.prevent
+                        >
+                          <QuestionCircleOutlined />
+                        </span>
+                      </Tooltip>
+                    </span>
                     <div class="text-gray-500 text-xs mt-0.5">
                       失败时阻塞任务执行 + 立即告警
                     </div>
@@ -573,7 +624,26 @@ function handleWizardNext() {
                 </Radio>
                 <Radio value="WEAK" class="!items-start rule-radio-weak">
                   <div>
-                    <span class="text-orange-600 font-medium">弱规则</span>
+                    <span class="text-orange-600 font-medium inline-flex items-center gap-0.5">
+                      弱规则
+                      <Tooltip
+                        placement="topLeft"
+                        :overlay-inner-style="{ maxWidth: '300px' }"
+                      >
+                        <template #title>
+                          <ul class="rule-strength-tooltip-list">
+                            <li v-for="(line, i) in weakRuleHelpItems" :key="i">{{ line }}</li>
+                          </ul>
+                        </template>
+                        <span
+                          class="rule-strength-help-trigger"
+                          tabindex="0"
+                          @click.stop.prevent
+                        >
+                          <QuestionCircleOutlined />
+                        </span>
+                      </Tooltip>
+                    </span>
                     <div class="text-gray-500 text-xs mt-0.5">失败时仅记录，不阻塞任务</div>
                   </div>
                 </Radio>
@@ -627,97 +697,118 @@ function handleWizardNext() {
           </Form.Item>
 
           <Form.Item label="状态">
-            <Radio.Group v-model:value="formValues.enabled" :options="enabledOptions" />
+            <div class="flex flex-wrap items-center gap-3">
+              <Switch v-model:checked="enabledSwitch" />
+              <span class="text-sm text-gray-700">{{
+                formValues.enabled === '0' ? '启用' : '停用'
+              }}</span>
+            </div>
+            <div class="text-gray-400 text-xs mt-1.5">停用后规则将不参与调度与质检执行</div>
           </Form.Item>
+          </div>
         </Form>
-
-        <div class="mt-4 rounded-lg border border-sky-200 bg-sky-50/90 p-4 text-sm">
-          <div class="font-medium text-sky-900 mb-3 flex items-center gap-1">
-            <BulbOutlined />
-            规则强度说明
-          </div>
-          <div class="grid grid-cols-1 md:grid-cols-2 gap-3">
-            <div class="rounded border border-red-100 overflow-hidden bg-white">
-              <div class="bg-red-50 text-red-700 font-medium px-3 py-2 text-xs">强规则</div>
-              <ul class="list-disc list-inside p-3 text-gray-600 text-xs space-y-1">
-                <li>失败时立即阻塞下游任务执行</li>
-                <li>触发告警通知</li>
-                <li>影响数据推送和数据应用</li>
-                <li>适用于：主键唯一性、重要字段非空</li>
-              </ul>
-            </div>
-            <div class="rounded border border-orange-100 overflow-hidden bg-white">
-              <div class="bg-orange-50 text-orange-700 font-medium px-3 py-2 text-xs">弱规则</div>
-              <ul class="list-disc list-inside p-3 text-gray-600 text-xs space-y-1">
-                <li>失败时仅记录日志和告警</li>
-                <li>不阻塞任务执行</li>
-                <li>纳入质量评分统计</li>
-                <li>适用于：数据分布检查、趋势监测</li>
-              </ul>
-            </div>
-          </div>
-        </div>
       </template>
 
       <!-- Step 3 预览保存 -->
       <template #step-3>
-        <div class="text-base font-semibold text-gray-800 mb-4">规则配置总览</div>
-        <Descriptions bordered :column="1" size="small" class="rule-preview-desc">
-          <Descriptions.Item label="规则名称">{{ formValues.ruleName || '-' }}</Descriptions.Item>
-          <Descriptions.Item label="规则编码">{{ formValues.ruleCode || '-' }}</Descriptions.Item>
-          <Descriptions.Item label="规则类型">
-            <Tag color="magenta">{{ ruleTypeLabel }}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="关联模板">
-            {{
-              templateRows.find((t) => t.id === formValues.templateId)?.templateName ||
-              selectedTemplate?.templateName ||
-              '-'
-            }}
-          </Descriptions.Item>
-          <Descriptions.Item label="适用级别">
-            <Tag>{{ applyLevelLabel }}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="目标数据源">
-            {{ selectedDs?.dsName || '-' }}
-          </Descriptions.Item>
-          <Descriptions.Item label="数仓层标签">
-            <Tag v-if="selectedDs?.dataLayer" color="blue">{{ selectedDs.dataLayer }}</Tag>
-            <span v-else>-</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="目标表">{{ formValues.targetTable || '-' }}</Descriptions.Item>
-          <Descriptions.Item label="目标列">{{ formValues.targetColumn || '-' }}</Descriptions.Item>
-          <Descriptions.Item label="规则表达式">
-            <pre class="bg-neutral-100 rounded p-2 text-xs overflow-x-auto m-0">{{
-              formValues.ruleExpr || '-'
-            }}</pre>
-          </Descriptions.Item>
-          <Descriptions.Item label="阈值范围">{{ thresholdPreview }}</Descriptions.Item>
-          <Descriptions.Item label="质量维度">
-            <template v-if="dimensionChecked.length">
-              <Tag v-for="d in dimensionChecked" :key="d" color="cyan" class="mb-1 mr-1">
-                {{ dimensionOptions.find((o) => o.value === d)?.label || d }}
-              </Tag>
-            </template>
-            <span v-else>-</span>
-          </Descriptions.Item>
-          <Descriptions.Item label="规则强度">
-            <Tag color="orange">{{ strengthLabel }}</Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="错误级别">
-            <Tag :color="errorLevelMeta[formValues.errorLevel || '']?.color || 'default'">
-              {{ errorLevelLabel }}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label="波动阈值">
-            {{ formValues.fluctuationThreshold ?? '-' }}
-          </Descriptions.Item>
-          <Descriptions.Item label="告警接收人">{{ formValues.alertReceivers || '-' }}</Descriptions.Item>
-          <Descriptions.Item label="排序权重">{{ formValues.sortOrder ?? 0 }}</Descriptions.Item>
-          <Descriptions.Item label="状态">
-            {{ enabledOptions.find((o) => o.value === formValues.enabled)?.label || '-' }}
-          </Descriptions.Item>
-        </Descriptions>
+        <div class="rule-preview-wrap">
+          <div class="text-sm text-gray-500 mb-3">请确认以下配置，确认无误后点击保存。</div>
+          <div class="preview-section">
+            <div class="preview-title">
+              <CheckCircleOutlined class="text-emerald-600" />
+              规则配置总览
+            </div>
+
+            <div class="detail-title">基本信息</div>
+            <Descriptions bordered :column="2" size="small" class="rule-preview-desc mb-4">
+              <Descriptions.Item label="规则名称">{{ formValues.ruleName || '—' }}</Descriptions.Item>
+              <Descriptions.Item label="规则编码">
+                <code class="rule-code-inline">{{ formValues.ruleCode || '—' }}</code>
+              </Descriptions.Item>
+              <Descriptions.Item label="规则类型">
+                <Tag color="processing">{{ ruleTypeLabel }}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="关联模板">
+                {{
+                  templateRows.find((t) => t.id === formValues.templateId)?.templateName ||
+                  selectedTemplate?.templateName ||
+                  '—'
+                }}
+              </Descriptions.Item>
+              <Descriptions.Item label="适用级别">
+                <Tag color="default">{{ applyLevelLabel }}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="状态">
+                <div class="flex flex-wrap items-center gap-2">
+                  <Switch :checked="formValues.enabled === '0'" disabled />
+                  <span class="text-sm">{{
+                    formValues.enabled === '0' ? '启用' : '停用'
+                  }}</span>
+                </div>
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div class="detail-title">数据目标</div>
+            <Descriptions bordered :column="2" size="small" class="rule-preview-desc mb-4">
+              <Descriptions.Item label="目标数据源">
+                {{ selectedDs?.dsName || '—' }}
+              </Descriptions.Item>
+              <Descriptions.Item label="数仓层标签">
+                <Tag v-if="selectedDs?.dataLayer" color="blue">{{ selectedDs.dataLayer }}</Tag>
+                <span v-else class="text-gray-400">—</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="目标表">
+                <code v-if="formValues.targetTable" class="rule-code-inline">{{ formValues.targetTable }}</code>
+                <span v-else class="text-gray-400">—</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="目标列">
+                {{ formValues.targetColumn?.trim() ? formValues.targetColumn : '—' }}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div class="detail-title">表达式与阈值</div>
+            <Descriptions bordered :column="1" size="small" class="rule-preview-desc mb-4">
+              <Descriptions.Item label="规则表达式">
+                <pre class="rule-expr-preview m-0">{{ formValues.ruleExpr || '—' }}</pre>
+              </Descriptions.Item>
+              <Descriptions.Item label="阈值范围">{{ thresholdPreview }}</Descriptions.Item>
+              <Descriptions.Item label="波动阈值(%)">
+                {{ formValues.fluctuationThreshold ?? '—' }}
+              </Descriptions.Item>
+            </Descriptions>
+
+            <div class="detail-title">质量与告警</div>
+            <Descriptions bordered :column="2" size="small" class="rule-preview-desc">
+              <Descriptions.Item label="质量维度" :span="2">
+                <template v-if="dimensionChecked.length">
+                  <Tag
+                    v-for="d in dimensionChecked"
+                    :key="d"
+                    color="cyan"
+                    class="mb-1 mr-1"
+                  >
+                    {{ dimensionOptions.find((o) => o.value === d)?.label || d }}
+                  </Tag>
+                </template>
+                <span v-else class="text-gray-400">—</span>
+              </Descriptions.Item>
+              <Descriptions.Item label="规则强度">
+                <Tag :color="formValues.ruleStrength === 'STRONG' ? 'red' : 'orange'">{{
+                  strengthLabel
+                }}</Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="错误级别">
+                <Tag :color="errorLevelMeta[formValues.errorLevel || '']?.color || 'default'">
+                  {{ errorLevelLabel }}
+                </Tag>
+              </Descriptions.Item>
+              <Descriptions.Item label="告警接收人" :span="2">
+                {{ formValues.alertReceivers || '—' }}
+              </Descriptions.Item>
+              <Descriptions.Item label="排序权重">{{ formValues.sortOrder ?? 0 }}</Descriptions.Item>
+            </Descriptions>
+          </div>
+        </div>
       </template>
     </WizardDrawer>
   </BasicDrawer>
@@ -727,8 +818,155 @@ function handleWizardNext() {
 .rule-wizard-form :deep(.ant-form-item) {
   margin-bottom: 16px;
 }
+.dqc-rule-step3-form :deep(.ant-form-item) {
+  margin-bottom: 18px;
+}
+.dqc-dimension-panel {
+  padding: 14px 14px 12px;
+  border-radius: 12px;
+  border: 1px solid #f0f0f0;
+  background: linear-gradient(165deg, #fafafa 0%, #fff 40%);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.dqc-dimension-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (min-width: 640px) {
+  .dqc-dimension-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+.dqc-dimension-cell {
+  margin: 0;
+  padding: 10px 12px;
+  border-radius: 10px;
+  border: 1px solid #e8e8e8;
+  background: #fff;
+  transition:
+    border-color 0.2s ease,
+    background 0.2s ease,
+    box-shadow 0.2s ease;
+}
+.dqc-dimension-cell:hover {
+  border-color: #bae0ff;
+  box-shadow: 0 1px 4px rgba(22, 119, 255, 0.08);
+}
+.dqc-dimension-cell--checked {
+  border-color: #1677ff;
+  background: #e6f4ff;
+  box-shadow: 0 0 0 1px rgba(22, 119, 255, 0.12);
+}
+.dqc-dimension-cell :deep(.dqc-dimension-checkbox) {
+  width: 100%;
+}
+.dqc-dimension-cell :deep(.ant-checkbox-wrapper) {
+  width: 100%;
+  align-items: center;
+  font-size: 14px;
+  color: #262626;
+}
+.dqc-dimension-hint {
+  margin-top: 10px;
+  font-size: 12px;
+  color: #8c8c8c;
+  line-height: 1.5;
+}
+.rule-strength-help-trigger {
+  display: inline-flex;
+  align-items: center;
+  color: #8c8c8c;
+  font-size: 13px;
+  line-height: 1;
+  cursor: help;
+  outline: none;
+}
+.rule-strength-help-trigger:hover,
+.rule-strength-help-trigger:focus-visible {
+  color: #595959;
+}
+.rule-strength-tooltip-list {
+  margin: 0;
+  padding-left: 1.1em;
+  text-align: left;
+  font-size: 12px;
+  line-height: 1.55;
+}
+.rule-strength-tooltip-list li + li {
+  margin-top: 4px;
+}
+.dqc-rule-strength-panel {
+  margin-top: 8px;
+  padding: 16px 18px 4px;
+  border-radius: 12px;
+  border: 1px solid #f0f0f0;
+  background: linear-gradient(180deg, #fafafa 0%, #fff 56px);
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.dqc-rule-strength-panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin-bottom: 14px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #f0f0f0;
+}
+.rule-preview-wrap {
+  padding-right: 4px;
+}
+.preview-section {
+  overflow-x: hidden;
+}
+.preview-title {
+  font-size: 15px;
+  font-weight: 600;
+  color: #1f1f1f;
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.detail-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #434343;
+  margin-bottom: 10px;
+  padding-left: 8px;
+  border-left: 3px solid #1677ff;
+}
 .rule-preview-desc :deep(.ant-descriptions-item-label) {
-  width: 140px;
+  min-width: 96px;
+  max-width: 160px;
+  width: 28%;
   font-weight: 500;
+  color: #595959;
+  white-space: nowrap;
+  writing-mode: horizontal-tb;
+}
+.rule-preview-desc :deep(.ant-descriptions-item-content) {
+  word-break: break-word;
+}
+.rule-code-inline {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 12px;
+  background: #f5f5f5;
+  padding: 2px 8px;
+  border-radius: 4px;
+  color: #262626;
+}
+.rule-expr-preview {
+  display: block;
+  max-height: 180px;
+  overflow: auto;
+  padding: 10px 12px;
+  font-size: 12px;
+  line-height: 1.5;
+  color: #262626;
+  background: #f7f7f9;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
 }
 </style>

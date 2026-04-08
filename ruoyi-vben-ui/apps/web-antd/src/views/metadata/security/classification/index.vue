@@ -42,12 +42,19 @@ const gridOptions: VxeGridProps = {
     {
       title: '分类名称',
       field: 'className',
-      width: 190,
+      width: 220,
       fixed: 'left',
       slots: { default: 'classNameCell' },
     },
     { title: '分类编码', field: 'classCode', width: 150 },
-    { title: '分类描述', field: 'classDesc', minWidth: 200, showOverflow: true },
+    // 勿仅用 minWidth：宽屏下 VXE 会把剩余宽度全塞给该列，左右列像被挤没、描述列空一大块
+    {
+      title: '分类描述',
+      field: 'classDesc',
+      width: 280,
+      minWidth: 200,
+      showOverflow: 'tooltip',
+    },
     {
       title: '关联等级',
       field: 'defaultLevelName',
@@ -72,6 +79,7 @@ const gridOptions: VxeGridProps = {
     { title: '创建时间', field: 'createTime', width: 170 },
     { title: '操作', field: 'action', width: 130, fixed: 'right', slots: { default: 'action' } },
   ],
+  // 与敏感等级页一致：auto 高度由内容撑开，避免与自定义页头/统计区叠加 fixed 高度导致行被压扁
   height: 'auto',
   proxyConfig: {
     ajax: {
@@ -138,7 +146,8 @@ function fmt(n: number | undefined) {
 </script>
 
 <template>
-  <Page :auto-content-height="true" class="clsf-page">
+  <!-- 不使用 auto-content-height：该页在表格上方还有页头/统计卡片，与敏感等级「仅 BasicTable」不同，固定内容高度会导致 VXE 表体被压扁、行重叠 -->
+  <Page class="clsf-page">
     <!-- ========== 页面标题区 ========== -->
     <div class="clsf-header">
       <div class="clsf-header-left">
@@ -159,12 +168,6 @@ function fmt(n: number | undefined) {
           <h1 class="clsf-title">数据分类</h1>
           <p class="clsf-subtitle">构建企业数据分类体系，为敏感字段识别提供分类依据</p>
         </div>
-      </div>
-      <div class="clsf-header-right">
-        <a-button type="primary" size="large" @click="handleAdd">
-          <template #icon><PlusOutlined /></template>
-          新增分类
-        </a-button>
       </div>
     </div>
 
@@ -200,11 +203,14 @@ function fmt(n: number | undefined) {
       </div>
     </div>
 
-    <!-- ========== 表格卡片 ========== -->
-    <div class="clsf-table-card">
-      <BasicTable>
+    <!-- 表格区：与敏感等级页相同，直接 BasicTable，不做 flex 定高包裹 -->
+    <BasicTable table-title="数据分类">
         <template #toolbar-tools>
           <Space>
+            <a-button type="primary" @click="handleAdd">
+              <template #icon><PlusOutlined /></template>
+              新增分类
+            </a-button>
             <a-button
               :disabled="!vxeCheckboxChecked(tableApi)"
               danger
@@ -292,8 +298,7 @@ function fmt(n: number | undefined) {
             </a-button>
           </div>
         </template>
-      </BasicTable>
-    </div>
+    </BasicTable>
 
     <ClassificationDrawer @reload="tableApi.query()" />
   </Page>
@@ -305,16 +310,16 @@ function fmt(n: number | undefined) {
    设计方向：SaaS Data Platform — 紫蓝渐变主色，白底卡片，清晰层次
    ================================================================ */
 
-/* ---- 页面容器 ---- */
+/* ---- 页面容器（仅布局装饰，不参与定高挤压表格） ---- */
 .clsf-page {
-  padding: 0 0 24px;
+  padding-bottom: 8px;
 }
 
 /* ---- 页面标题区 ---- */
 .clsf-header {
   display: flex;
   align-items: center;
-  justify-content: space-between;
+  justify-content: flex-start;
   padding: 20px 24px 16px;
   background: linear-gradient(135deg, #fafafa 0%, #f5f0ff 100%);
   border-bottom: 1px solid #f0e8ff;
@@ -355,7 +360,7 @@ function fmt(n: number | undefined) {
   display: grid;
   grid-template-columns: repeat(4, 1fr);
   gap: 12px;
-  padding: 16px 24px 0;
+  padding: 16px 24px 8px;
 }
 @media (max-width: 768px) {
   .clsf-stats { grid-template-columns: repeat(2, 1fr); }
@@ -401,11 +406,6 @@ function fmt(n: number | undefined) {
   color: #8c8ca1;
   font-weight: 500;
   letter-spacing: 0.01em;
-}
-
-/* ---- 表格卡片容器 ---- */
-.clsf-table-card {
-  padding: 16px 24px 0;
 }
 
 /* ---- 分类名称单元格 ---- */
