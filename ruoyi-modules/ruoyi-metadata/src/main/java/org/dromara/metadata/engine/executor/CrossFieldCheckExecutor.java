@@ -4,11 +4,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.dromara.datasource.adapter.DataSourceAdapter;
 import org.dromara.metadata.domain.DqcExecutionDetail;
 import org.dromara.metadata.domain.DqcRuleDef;
-import org.dromara.metadata.domain.vo.EvaluationResult;
 
-import java.math.BigDecimal;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * 跨字段检查执行器
@@ -16,6 +15,8 @@ import java.util.Map;
  * 规则类型: CROSS_FIELD
  * <p>
  * 检查多个字段之间的关系是否满足预期（如两列之和等于第三列）。
+ * <p>
+ * 元数据驱动：使用 MetadataContext 获取表名、字段名、对比字段名
  */
 @Slf4j
 public class CrossFieldCheckExecutor extends AbstractRuleExecutor {
@@ -29,10 +30,22 @@ public class CrossFieldCheckExecutor extends AbstractRuleExecutor {
 
     @Override
     public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), () -> false);
+    }
+
+    @Override
+    public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                        Supplier<Boolean> cancelChecker) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), cancelChecker);
+    }
+
+    @Override
+    public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                        MetadataContext context, Supplier<Boolean> cancelChecker) {
         long start = System.currentTimeMillis();
 
-        // 渲染SQL
-        String sql = renderSql(rule, adapter);
+        // 渲染SQL（使用元数据上下文）
+        String sql = renderSql(rule, adapter, context);
         detail.setExecuteSql(sql);
 
         try {
@@ -61,51 +74,5 @@ public class CrossFieldCheckExecutor extends AbstractRuleExecutor {
             detail.setErrorLevel(rule.getErrorLevel());
             detail.setErrorMsg(e.getMessage());
         }
-    }
-
-    /**
-     * 覆盖父类方法，添加CROSS_FIELD特有的占位符
-     */
-    @Override
-    protected String renderSql(DqcRuleDef rule, DataSourceAdapter adapter) {
-        String sqlTemplate = rule.getRuleExpr();
-        if (sqlTemplate == null || sqlTemplate.isBlank()) {
-            return "";
-        }
-        String result = sqlTemplate;
-
-        java.util.LinkedHashMap<String, String> replacements = new java.util.LinkedHashMap<>();
-        replacements.put("table", quoteQualifiedIdentifier(adapter, rule.getTargetTable()));
-        replacements.put("table_name", quoteQualifiedIdentifier(adapter, rule.getTargetTable()));
-        replacements.put("column_a", quoteIdentifier(adapter, rule.getTargetColumn()));
-        replacements.put("column_b", quoteIdentifier(adapter, rule.getCompareColumn()));
-        replacements.put("column_c", quoteIdentifier(adapter, rule.getCompareTable())); // compareTable存的是第三列
-        replacements.put("compare_table", quoteQualifiedIdentifier(adapter, rule.getCompareTable()));
-        replacements.put("compare_column", quoteIdentifier(adapter, rule.getCompareColumn()));
-        replacements.put("min_value", toSqlNumber(rule.getThresholdMin()));
-        replacements.put("max_value", toSqlNumber(rule.getThresholdMax()));
-        replacements.put("threshold_min", toSqlNumber(rule.getThresholdMin()));
-        replacements.put("threshold_max", toSqlNumber(rule.getThresholdMax()));
-        replacements.put("threshold_pct", toSqlNumber(rule.getThresholdMin()));
-        replacements.put("z_threshold", toSqlNumber(rule.getThresholdMin()));
-
-        for (java.util.Map.Entry<String, String> entry : replacements.entrySet()) {
-            if (entry.getValue() != null) {
-                result = result.replace("${" + entry.getKey() + "}", entry.getValue());
-            }
-        }
-
-        java.util.regex.Matcher matcher = PLACEHOLDER_PATTERN.matcher(result);
-        java.util.List<String> unresolved = new java.util.ArrayList<>();
-        while (matcher.find()) {
-            String placeholder = matcher.group(1);
-            if (!unresolved.contains(placeholder)) {
-                unresolved.add(placeholder);
-            }
-        }
-        if (!unresolved.isEmpty()) {
-            throw new IllegalArgumentException("规则SQL存在未绑定占位符: " + String.join(", ", unresolved));
-        }
-        return result;
     }
 }

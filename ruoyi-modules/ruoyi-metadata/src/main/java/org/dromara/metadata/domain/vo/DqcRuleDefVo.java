@@ -11,6 +11,8 @@ import java.math.BigDecimal;
 
 /**
  * 数据质量规则定义视图对象
+ * <p>
+ * 用于前端展示，字段信息通过元数据 JOIN 查询获取
  */
 @Data
 @ExcelIgnoreUnannotated
@@ -41,6 +43,67 @@ public class DqcRuleDefVo implements Serializable {
     private Long templateId;
 
     /**
+     * 模板名称（用于展示）
+     */
+    private String templateName;
+
+    // ===== 元数据关联字段 =====
+
+    /**
+     * 目标表元数据ID (metadata_table.id)
+     */
+    private Long tableId;
+
+    /**
+     * 目标表名称（通过元数据 JOIN 获取）
+     */
+    private String tableName;
+
+    /**
+     * 目标字段元数据ID (metadata_column.id)
+     */
+    private Long columnId;
+
+    /**
+     * 目标字段名称（通过元数据 JOIN 获取）
+     */
+    private String columnName;
+
+    /**
+     * 对比表元数据ID (metadata_table.id)
+     */
+    private Long compareTableId;
+
+    /**
+     * 对比表名称（通过元数据 JOIN 获取）
+     */
+    private String compareTableName;
+
+    /**
+     * 对比字段元数据ID (metadata_column.id)
+     */
+    private Long compareColumnId;
+
+    /**
+     * 对比字段名称（通过元数据 JOIN 获取）
+     */
+    private String compareColumnName;
+
+    // ===== 数据源信息（通过元数据获取） =====
+
+    /**
+     * 数据源ID（通过 tableId → metadata_table.ds_id 获取）
+     */
+    private Long dsId;
+
+    /**
+     * 数据源名称（用于展示）
+     */
+    private String dsName;
+
+    // ===== 规则配置字段 =====
+
+    /**
      * 规则类型
      */
     private String ruleType;
@@ -59,41 +122,6 @@ public class DqcRuleDefVo implements Serializable {
      * 规则表达式/SQL
      */
     private String ruleExpr;
-
-    /**
-     * 目标数据源ID
-     */
-    private Long targetDsId;
-
-    /**
-     * 目标数据源名称
-     */
-    private String targetDsName;
-
-    /**
-     * 目标表名
-     */
-    private String targetTable;
-
-    /**
-     * 目标列名
-     */
-    private String targetColumn;
-
-    /**
-     * 对比数据源ID
-     */
-    private Long compareDsId;
-
-    /**
-     * 对比表名
-     */
-    private String compareTable;
-
-    /**
-     * 对比列名
-     */
-    private String compareColumn;
 
     /**
      * 阈值最小值
@@ -116,12 +144,12 @@ public class DqcRuleDefVo implements Serializable {
     private String regexPattern;
 
     /**
-     * 错误级别：LOW/MEDIUM/HIGH/CRITICAL
+     * 错误级别：LOW / MEDIUM / HIGH / CRITICAL
      */
     private String errorLevel;
 
     /**
-     * 规则强度：STRONG-强规则 / WEAK-弱规则
+     * 规则强度：STRONG / WEAK
      */
     private String ruleStrength;
 

@@ -28,6 +28,11 @@ public interface IMetadataColumnService {
     /** 更新别名 */
     int updateAlias(Long id, String alias);
 
+    /**
+     * 更新字段（别名、注释、敏感等级）
+     */
+    int updateColumn(MetadataColumnBo bo);
+
     /** 删除 */
     int deleteColumn(Long[] ids);
 

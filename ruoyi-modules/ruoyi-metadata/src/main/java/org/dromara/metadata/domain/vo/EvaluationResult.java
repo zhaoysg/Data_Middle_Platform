@@ -3,12 +3,12 @@ package org.dromara.metadata.domain.vo;
 import java.math.BigDecimal;
 
 /**
- * 规则评估结果记录
+ * Evaluation result record
  *
- * @param pass 是否通过
- * @param resultValue 结果值
- * @param thresholdValue 阈值/比较值
- * @param message 评估消息
+ * @param pass pass flag
+ * @param resultValue result value
+ * @param thresholdValue threshold value
+ * @param message message
  */
 public record EvaluationResult(
     boolean pass,
@@ -17,21 +17,21 @@ public record EvaluationResult(
     String message
 ) {
     /**
-     * 创建成功结果
+     * Create pass result
      */
     public static EvaluationResult pass(BigDecimal resultValue, String message) {
         return new EvaluationResult(true, resultValue, null, message);
     }
 
     /**
-     * 创建失败结果
+     * Create fail result
      */
     public static EvaluationResult fail(BigDecimal resultValue, BigDecimal thresholdValue, String message) {
         return new EvaluationResult(false, resultValue, thresholdValue, message);
     }
 
     /**
-     * 创建跳过结果（首轮执行等）
+     * Create skip result (for first execution)
      */
     public static EvaluationResult skip(String message) {
         return new EvaluationResult(true, null, null, message);

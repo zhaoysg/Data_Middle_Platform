@@ -68,7 +68,7 @@ const submitting = ref(false);
 const wizardRef = ref<InstanceType<typeof WizardDrawer>>();
 
 const formValues = ref<Record<string, any>>({
-  enabled: '0',
+  enabled: '1',
   builtin: '0',
   sortOrder: 0,
   paramSpec: '[]',
@@ -249,7 +249,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       } else {
         recordId.value = undefined;
         formValues.value = {
-          enabled: '0',
+          enabled: '1',
           builtin: '0',
           sortOrder: 0,
           paramSpec: '[]',
@@ -289,7 +289,7 @@ async function handleSubmit() {
 
 function handleClosed() {
   recordId.value = undefined;
-  formValues.value = { enabled: '0', builtin: '0', sortOrder: 0, paramSpec: '[]' };
+  formValues.value = { enabled: '1', builtin: '0', sortOrder: 0, paramSpec: '[]' };
   paramList.value = [];
   currentStep.value = 0;
 }
@@ -335,7 +335,7 @@ function handleWizardNext() {
 }
 
 const builtinLabel = computed(() => (formValues.value.builtin === '1' ? '是' : '否'));
-const enabledLabel = computed(() => (formValues.value.enabled === '0' ? '启用' : '停用'));
+const enabledLabel = computed(() => (formValues.value.enabled === '1' ? '启用' : '停用'));
 const dimensionLabel = computed(
   () => dimensionOptions.find((o) => o.value === formValues.value.dimension)?.label || '-',
 );
@@ -647,7 +647,7 @@ const previewExpr = computed(() => {
                   <div class="flex min-w-0 flex-1 items-center gap-2 px-3 py-2.5">
                     <Tag
                       v-if="formValues.enabled !== undefined && formValues.enabled !== null"
-                      :color="formValues.enabled === '0' ? 'success' : 'default'"
+                      :color="formValues.enabled === '1' ? 'success' : 'default'"
                       class="m-0"
                     >
                       {{ enabledLabel }}

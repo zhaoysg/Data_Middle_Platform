@@ -1,5 +1,6 @@
 package org.dromara;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.boot.context.metrics.buffering.BufferingApplicationStartup;
@@ -11,6 +12,12 @@ import org.springframework.boot.context.metrics.buffering.BufferingApplicationSt
  */
 
 @SpringBootApplication
+@MapperScan({
+    "org.dromara.metadata.mapper",
+    "org.dromara.system.mapper",
+    "org.dromara.datasource.mapper",
+    "org.dromara.workflow.mapper"
+})
 public class DromaraApplication {
 
     public static void main(String[] args) {

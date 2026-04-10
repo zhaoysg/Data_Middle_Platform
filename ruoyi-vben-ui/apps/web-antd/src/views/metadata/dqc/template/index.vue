@@ -45,9 +45,10 @@ const builtinLabelMap: Record<string, string> = {
   '0': '否',
 };
 
+/** 与库表一致：1=启用，0=停用 */
 const enabledLabelMap: Record<string, string> = {
-  '0': '启用',
-  '1': '停用',
+  '1': '启用',
+  '0': '停用',
 };
 
 const formOptions: VbenFormProps = {
@@ -242,7 +243,9 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => dqcTemplateUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => dqcTemplateUpdate({ id: row.id, enabled: row.enabled })"
           @reload="tableApi.query()"
         />
       </template>

@@ -10,10 +10,9 @@ import { Popconfirm, Space, Tag } from 'ant-design-vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  dqcRuleAdd,
   dqcRuleList,
   dqcRuleRemove,
-  dqcRuleUpdate,
+  dqcRuleUpdateStatus,
 } from '#/api/metadata/dqc/rule';
 import { TableSwitch } from '#/components/table';
 
@@ -104,15 +103,6 @@ const gridOptions: VxeGridProps = {
       },
     },
     {
-      title: '数据源',
-      field: 'targetDsName',
-      width: 120,
-      formatter: ({ row }: { row: DqcRuleDef }) =>
-        (row as any).targetDsName || (row as any).dsName || '-',
-    },
-    { title: '目标表', field: 'targetTable', width: 150 },
-    { title: '目标字段', field: 'targetColumn', width: 120 },
-    {
       title: '错误级别',
       field: 'errorLevel',
       width: 100,
@@ -198,7 +188,8 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => dqcRuleUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          :api="() =>
+            dqcRuleUpdateStatus(row.id!, String(row.enabled ?? ''))"
           @reload="tableApi.query()"
         />
       </template>

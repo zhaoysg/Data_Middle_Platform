@@ -488,14 +488,6 @@ async function openRuleSelector(tableName: string, columnName: string) {
   try {
     // 必须传 targetDsId：后端无此参数时用「可访问数据源 ID 列表」过滤；该列表在数据权限下可能为空，
     // 会导致 SQL 恒为 id=-1，弹窗无数据。与 bgdata 一致，按当前方案数据源拉取可绑定的规则。
-    // ⚠️ 调试：先用原生 fetch 打印原始响应，确认字段值
-    const debugUrl = `/system/metadata/dqc/rule/list?pageNum=1&pageSize=10&enabled=0&targetDsId=${bindDsId.value}`;
-    console.log('[DQC] 调试 fetch URL:', debugUrl);
-    const raw = await fetch(debugUrl, { credentials: 'include' });
-    const rawJson = await raw.json();
-    console.log('[DQC] 原始响应（完整）:', JSON.stringify(rawJson));
-    console.log('[DQC] enabled 字段值示例:', rawJson?.rows?.[0]?.enabled, '| rows 总数:', rawJson?.total);
-
     const res = await dqcRuleList({
       pageNum: 1,
       pageSize: 999,

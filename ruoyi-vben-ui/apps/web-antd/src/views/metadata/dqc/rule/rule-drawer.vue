@@ -25,10 +25,16 @@ import {
 } from '@ant-design/icons-vue';
 
 import type { Datasource } from '#/api/system/datasource/model';
-import type { DqcRuleDef, DqcRuleTemplate } from '#/api/metadata/model';
-import { datasourceEnabled, datasourceTables } from '#/api/system/datasource';
+import type { DqcRuleDef, DqcRuleTemplate, MetadataTable, MetadataColumn } from '#/api/metadata/model';
+import { datasourceEnabled } from '#/api/system/datasource';
 import { dqcTemplateInfo, dqcTemplateList } from '#/api/metadata/dqc/template';
-import { dqcRuleAdd, dqcRuleInfo, dqcRuleUpdate } from '#/api/metadata/dqc/rule';
+import {
+  dqcRuleAdd,
+  dqcRuleInfo,
+  dqcRuleUpdate,
+  dqcGetTableColumns,
+} from '#/api/metadata/dqc/rule';
+import { metadataTableList } from '#/api/metadata/table';
 
 import WizardDrawer from '#/components/metadata/WizardDrawer.vue';
 
@@ -97,10 +103,18 @@ const formValues = ref<Record<string, any>>({
 const datasourceList = ref<Datasource[]>([]);
 const templateRows = ref<DqcRuleTemplate[]>([]);
 const selectedTemplate = ref<DqcRuleTemplate | null>(null);
-const tableOptions = ref<{ label: string; value: string }[]>([]);
-const tablesLoading = ref(false);
 /** 多选质量维度 */
 const dimensionChecked = ref<string[]>([]);
+
+/** 元数据表下拉选项（从元数据系统选择） */
+const metadataTableOptions = ref<{ label: string; value: number; record: MetadataTable }[]>([]);
+const metadataTableLoading = ref(false);
+const selectedMetadataTable = ref<MetadataTable | null>(null);
+
+/** 元数据字段下拉选项 */
+const metadataColumnOptions = ref<{ label: string; value: number; record: MetadataColumn }[]>([]);
+const metadataColumnLoading = ref(false);
+const selectedMetadataColumn = ref<MetadataColumn | null>(null);
 
 const title = computed(() => (recordId.value ? '编辑规则' : '新建规则'));
 
@@ -179,6 +193,9 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       datasourceList.value = dsList || [];
       templateRows.value = ((tplRes as any)?.rows || tplRes || []) as DqcRuleTemplate[];
 
+      // 加载元数据表列表
+      await loadMetadataTables();
+
       const { id } = drawerApi.getData() as { id?: number };
       if (id) {
         recordId.value = id;
@@ -201,6 +218,13 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
             selectedTemplate.value = null;
           }
         }
+        // 如果有元数据表ID，加载对应的字段列表
+        if (info.tableId) {
+          await onMetadataTableChange(info.tableId);
+          if (info.columnId) {
+            onMetadataColumnChange(info.columnId);
+          }
+        }
       } else {
         recordId.value = undefined;
         formValues.value = {
@@ -213,36 +237,89 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
         selectedTemplate.value = null;
       }
       currentStep.value = 0;
-      await loadTablesForDs(formValues.value.targetDsId);
     } finally {
       drawerApi.drawerLoading(false);
     }
   },
 });
 
-watch(
-  () => formValues.value.targetDsId,
-  (dsId) => {
-    loadTablesForDs(dsId);
-  },
-);
-
 watch(dimensionChecked, (arr) => {
   formValues.value.dimensions = arr.length ? arr.join(',') : undefined;
 });
 
-async function loadTablesForDs(dsId?: number) {
-  tableOptions.value = [];
-  if (!dsId) return;
-  tablesLoading.value = true;
+/** 加载元数据表列表（用于从元数据选择） */
+async function loadMetadataTables() {
+  metadataTableLoading.value = true;
+  metadataTableOptions.value = [];
   try {
-    const names = await datasourceTables(dsId);
-    tableOptions.value = (names || []).map((n) => ({ label: n, value: n }));
+    const res = await metadataTableList({ status: 'ACTIVE', pageNum: 1, pageSize: 500 }) as any;
+    const rows = res?.rows || res || [];
+    metadataTableOptions.value = rows.map((t: MetadataTable) => ({
+      label: `${t.tableAlias || t.tableName}${t.tableComment ? ` (${t.tableComment})` : ''}`,
+      value: t.id as number,
+      record: t,
+    }));
   } catch {
-    tableOptions.value = [];
+    metadataTableOptions.value = [];
   } finally {
-    tablesLoading.value = false;
+    metadataTableLoading.value = false;
   }
+}
+
+/** 当元数据表选择变化时，加载该表的字段列表 */
+async function onMetadataTableChange(tableId: number | undefined) {
+  if (!tableId) {
+    selectedMetadataTable.value = null;
+    metadataColumnOptions.value = [];
+    selectedMetadataColumn.value = null;
+    // 清除关联的字段值
+    formValues.value.columnId = undefined;
+    formValues.value.targetColumn = undefined;
+    formValues.value.tableId = undefined;
+    return;
+  }
+
+  const option = metadataTableOptions.value.find((o) => o.value === tableId);
+  selectedMetadataTable.value = option?.record || null;
+  formValues.value.tableId = tableId;
+  formValues.value.targetTable = selectedMetadataTable.value?.tableName;
+
+  // 自动获取数据源ID（如果尚未选择）
+  if (!formValues.value.targetDsId && selectedMetadataTable.value?.dsId) {
+    formValues.value.targetDsId = selectedMetadataTable.value.dsId;
+  }
+
+  // 加载字段列表
+  metadataColumnLoading.value = true;
+  metadataColumnOptions.value = [];
+  selectedMetadataColumn.value = null;
+  formValues.value.columnId = undefined;
+  formValues.value.targetColumn = undefined;
+  try {
+    const columns = (await dqcGetTableColumns(tableId)) as MetadataColumn[] || [];
+    metadataColumnOptions.value = columns.map((c: MetadataColumn) => ({
+      label: `${c.columnAlias || c.columnName}${c.columnComment ? ` - ${c.columnComment}` : ''}`,
+      value: c.id as number,
+      record: c,
+    }));
+  } catch {
+    metadataColumnOptions.value = [];
+  } finally {
+    metadataColumnLoading.value = false;
+  }
+}
+
+/** 当元数据字段选择变化时 */
+function onMetadataColumnChange(columnId: number | undefined) {
+  if (!columnId) {
+    selectedMetadataColumn.value = null;
+    formValues.value.targetColumn = undefined;
+    return;
+  }
+  const option = metadataColumnOptions.value.find((o) => o.value === columnId);
+  selectedMetadataColumn.value = option?.record || null;
+  formValues.value.columnId = columnId;
+  formValues.value.targetColumn = selectedMetadataColumn.value?.columnName;
 }
 
 async function onRuleTypeChange() {
@@ -328,17 +405,21 @@ function validateStep(step: number): boolean {
       message.warning('请选择适用级别');
       return false;
     }
-    if (!f.targetDsId) {
-      message.warning('请选择目标数据源');
-      return false;
-    }
   }
   if (step === 1) {
-    if (!f.targetTable?.trim()) {
-      message.warning('请选择或填写目标表名');
+    if (!formValues.value.tableId) {
+      message.warning('请从元数据中选择目标表，用于表达式预览与保存时的执行绑定信息');
       return false;
     }
-    if (!f.ruleExpr?.trim()) {
+    if (!formValues.value.targetDsId) {
+      message.warning('无法确定数据源，请重新选择目标表或先在基本信息中选择目标数据源');
+      return false;
+    }
+    if (formValues.value.applyLevel === 'COLUMN' && !formValues.value.columnId) {
+      message.warning('字段级规则请从元数据中选择目标字段');
+      return false;
+    }
+    if (!formValues.value.ruleExpr?.trim()) {
       message.warning('请填写规则表达式');
       return false;
     }
@@ -430,7 +511,7 @@ function handleWizardNext() {
               placeholder="请选择适用级别"
             />
           </Form.Item>
-          <Form.Item label="目标数据源" required>
+          <Form.Item label="目标数据源">
             <Select
               v-model:value="formValues.targetDsId"
               :options="
@@ -439,7 +520,8 @@ function handleWizardNext() {
                   value: d.dsId,
                 }))
               "
-              placeholder="请选择目标数据源"
+              placeholder="可选；下一步从元数据选表后会自动带出对应数据源"
+              allow-clear
               show-search
               option-filter-prop="label"
             />
@@ -494,21 +576,65 @@ function handleWizardNext() {
       <!-- Step 1 配置规则 -->
       <template #step-1>
         <Form :model="formValues" layout="vertical">
-          <Form.Item label="目标表名" required>
+          <div class="mb-4 p-3 bg-blue-50 rounded-lg border border-blue-200">
+            <div class="text-blue-700 text-sm">
+              <InfoCircleOutlined class="mr-1" />
+              <strong>说明：</strong>请从元数据选择表/字段，用于表达式中的
+              <code>${table}</code>、<code>${column}</code> 替换预览，并与保存后的规则执行解析一致（非列表展示字段）。
+            </div>
+          </div>
+
+          <Form.Item label="目标表（元数据选择）" required>
             <Select
-              v-model:value="formValues.targetTable"
-              :options="tableOptions"
-              :loading="tablesLoading"
-              placeholder="请选择目标表"
+              v-model:value="formValues.tableId"
+              :options="metadataTableOptions"
+              :loading="metadataTableLoading"
+              placeholder="请从元数据中选择目标表"
               show-search
               allow-clear
               option-filter-prop="label"
-            />
-            <div class="text-gray-400 text-xs mt-1">若下拉无数据，请确认已选数据源且元数据已同步</div>
+              @change="(v: any) => onMetadataTableChange(v)"
+            >
+              <template #suffixIcon>
+                <SyncOutlined v-if="metadataTableLoading" spin />
+              </template>
+            </Select>
+            <div v-if="selectedMetadataTable" class="mt-2 text-xs text-gray-500">
+              <Tag color="blue">{{ selectedMetadataTable.tableName }}</Tag>
+              <span v-if="selectedMetadataTable.tableAlias">{{ selectedMetadataTable.tableAlias }}</span>
+              <span v-if="selectedMetadataTable.dsName" class="ml-2 text-gray-400">
+                · {{ selectedMetadataTable.dsName }}
+              </span>
+            </div>
           </Form.Item>
-          <Form.Item label="目标列名">
-            <Input v-model:value="formValues.targetColumn" placeholder="字段级规则时填写，表级可留空" />
+
+          <Form.Item
+            v-if="metadataColumnOptions.length > 0 || selectedMetadataTable"
+            label="目标字段（元数据选择）"
+          >
+            <Select
+              v-model:value="formValues.columnId"
+              :options="metadataColumnOptions"
+              :loading="metadataColumnLoading"
+              placeholder="请从元数据中选择目标字段（字段级规则必填）"
+              show-search
+              allow-clear
+              option-filter-prop="label"
+              @change="(v: any) => onMetadataColumnChange(v)"
+            >
+              <template #suffixIcon>
+                <SyncOutlined v-if="metadataColumnLoading" spin />
+              </template>
+            </Select>
+            <div v-if="selectedMetadataColumn" class="mt-2 text-xs text-gray-500">
+              <Tag color="cyan">{{ selectedMetadataColumn.columnName }}</Tag>
+              <span v-if="selectedMetadataColumn.columnAlias">{{ selectedMetadataColumn.columnAlias }}</span>
+              <span v-if="selectedMetadataColumn.dataType" class="ml-2 text-gray-400">
+                · {{ selectedMetadataColumn.dataType }}
+              </span>
+            </div>
           </Form.Item>
+
           <Form.Item label="规则表达式" required>
             <Input.TextArea
               v-model:value="formValues.ruleExpr"
@@ -696,15 +822,15 @@ function handleWizardNext() {
             <div class="text-gray-400 text-xs mt-1">数值越小排序越靠前</div>
           </Form.Item>
 
-          <Form.Item label="状态">
-            <div class="flex flex-wrap items-center gap-3">
-              <Switch v-model:checked="enabledSwitch" />
+          <div class="flex items-center gap-3">
+              <Switch
+                :checked="formValues.enabled === '0'"
+                disabled
+              />
               <span class="text-sm text-gray-700">{{
                 formValues.enabled === '0' ? '启用' : '停用'
               }}</span>
             </div>
-            <div class="text-gray-400 text-xs mt-1.5">停用后规则将不参与调度与质检执行</div>
-          </Form.Item>
           </div>
         </Form>
       </template>

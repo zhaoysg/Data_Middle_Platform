@@ -1,0 +1,145 @@
+-- ============================================================
+-- DQC规则定义示例数据说明
+-- ============================================================
+--
+-- 注意：此文件不再包含实际的 INSERT 语句
+-- 因为元数据驱动的规则定义依赖 metadata_table 和 metadata_column 的具体记录 ID
+--
+-- 请按照以下步骤配置示例规则：
+--
+-- 1. 先执行元数据扫描，确保 metadata_table 和 metadata_column 中有所需的表和字段
+--
+-- 2. 查询已扫描的元数据：
+--    -- 查看所有表
+--    SELECT id, ds_id, ds_name, table_name FROM metadata_table WHERE del_flag = '0';
+--    -- 查看某个表的字段
+--    SELECT id, table_id, column_name FROM metadata_column WHERE table_id = ?;
+--
+-- 3. 使用查到的 tableId/columnId 插入规则定义
+--
+-- ============================================================
+-- 示例规则配置（请替换为实际 ID）
+-- ============================================================
+--
+-- INSERT INTO dqc_rule_def (
+--     tenant_id, rule_name, rule_code, template_id, rule_type, apply_level,
+--     table_id, column_id, compare_table_id, compare_column_id,
+--     dimensions, rule_expr,
+--     threshold_min, threshold_max, fluctuation_threshold, error_level, rule_strength,
+--     sort_order, enabled, del_flag, create_dept, create_by, create_time
+-- ) VALUES (
+--     '000000',
+--     '【示例】用户表-手机号NULL检测',
+--     'DEF_COL_USER_PHONE_NULL',
+--     4, 'NULL_CHECK', 'COLUMN',
+--     {tableId},  -- 替换为 metadata_table 中 user 表的 ID
+--     {columnId}, -- 替换为 metadata_column 中 phone 字段的 ID
+--     NULL, NULL,
+--     'COMPLETENESS',
+--     NULL,
+--     NULL, 5.00, NULL, 'LOW', 'WEAK',
+--     1, '1', '0', 100, '1', NOW()
+-- );
+--
+-- ============================================================
+-- 模板ID参考（来自 dqc_rule_template 表）：
+-- ============================================================
+--   1  = TBL_ROW_COUNT_NULL        (表行数空值检测)
+--   2  = TBL_ROW_COUNT_FLUCTUATION (表行数波动检测)
+--   3  = TBL_UPDATE_TIMELINESS     (表更新时效检测)
+--   4  = COL_NULL_CHECK            (字段空值检测)
+--   5  = COL_UNIQUE_CHECK          (字段唯一性检测)
+--   6  = COL_DUPLICATE_COUNT       (字段重复值检测)
+--   7  = COL_VALUE_RANGE           (字段值域检测)
+--   8  = COL_ENUM_CHECK            (字段枚举值检测)
+--   9  = COL_REGEX_PATTERN         (字段正则匹配检测)
+--   10 = COL_MIN_MAX               (字段最小值检测)
+--   11 = COL_MAX_VALUE             (字段最大值检测)
+--   12 = COL_AVG_FLUCTUATION       (字段平均值波动检测)
+--   13 = COL_STRING_LENGTH         (字段字符串长度检测)
+--   14 = COL_Z_SCORE               (字段Z-Score异常检测)
+--   15 = CROSS_A_GREATER_B         (字段A>字段B一致性)
+--   16 = CROSS_A_PLUS_B            (字段A+B=C一致性)
+--   17 = CROSS_NULL_CONSISTENCY    (字段空值一致性检测)
+--   18 = CROSS_TBL_ROW_COUNT       (跨表记录数一致性)
+--   19 = CROSS_TBL_PK_CONSISTENCY  (跨表主键一致性)
+--   20 = CUSTOM_SQL                (自定义SQL规则)
+-- ============================================================
+--
+-- ============================================================
+-- 应用层级说明：
+-- ============================================================
+--   TABLE       = 表级规则（不需要 columnId）
+--   COLUMN      = 字段级规则（需要 columnId）
+--   CROSS_FIELD = 跨字段规则（需要 compareColumnId）
+--   CROSS_TABLE = 跨表规则（需要 compareTableId）
+-- ============================================================
+
+-- ============================================================
+-- 示例：字段级规则配置
+-- ============================================================
+--
+-- 【字段级】用户表-手机号NULL检测：手机号空值比例不超过5%
+-- INSERT INTO dqc_rule_def (...) VALUES (
+--     '000000', '用户表-手机号NULL检测', 'DEF_COL_USER_PHONE_NULL',
+--     4, 'NULL_CHECK', 'COLUMN',
+--     {user表ID}, {phone字段ID}, NULL, NULL,
+--     'COMPLETENESS', NULL,
+--     NULL, 5.00, NULL, 'LOW', 'WEAK',
+--     10, '1', '0', 100, '1', NOW()
+-- );
+--
+-- 【字段级】用户表-邮箱格式检测：必须是合法邮箱格式
+-- INSERT INTO dqc_rule_def (...) VALUES (
+--     '000000', '用户表-邮箱格式检测', 'DEF_COL_USER_EMAIL_REGEX',
+--     9, 'REGEX', 'COLUMN',
+--     {user表ID}, {email字段ID}, NULL, NULL,
+--     'VALIDITY', NULL,
+--     0, NULL, NULL, '^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$', 'MEDIUM', 'STRONG',
+--     13, '1', '0', 100, '1', NOW()
+-- );
+--
+-- ============================================================
+-- 示例：表级规则配置
+-- ============================================================
+--
+-- 【表级】行数下限检测：表行数不能少于1
+-- INSERT INTO dqc_rule_def (...) VALUES (
+--     '000000', '用户表-行数下限检测', 'DEF_TBL_USER_ROW_MIN',
+--     1, 'NULL_CHECK', 'TABLE',
+--     {user表ID}, NULL, NULL, NULL,
+--     'COMPLETENESS',
+--     'SELECT COUNT(*) AS cnt FROM ${table}',
+--     1, NULL, NULL, 'MEDIUM', 'STRONG',
+--     1, '1', '0', 100, '1', NOW()
+-- );
+--
+-- ============================================================
+-- 示例：跨字段规则配置
+-- ============================================================
+--
+-- 【跨字段】笔记表-开始时间 <= 结束时间一致性
+-- INSERT INTO dqc_rule_def (...) VALUES (
+--     '000000', '笔记表-时间范围一致性', 'DEF_CROSS_NOTE_DATE_RANGE',
+--     15, 'THRESHOLD', 'CROSS_FIELD',
+--     {note表ID}, {start_time字段ID}, {note表ID}, {end_time字段ID},
+--     'CONSISTENCY',
+--     'SELECT COUNT(*) AS violation_count FROM ${table} WHERE ${column} IS NOT NULL AND ${compare_column} IS NOT NULL AND NOT (${column} <= ${compare_column})',
+--     0, NULL, NULL, 'HIGH', 'STRONG',
+--     20, '1', '0', 100, '1', NOW()
+-- );
+--
+-- ============================================================
+-- 示例：跨表规则配置
+-- ============================================================
+--
+-- 【跨表】笔记表-user_id必须在用户表中存在
+-- INSERT INTO dqc_rule_def (...) VALUES (
+--     '000000', '笔记表-用户ID跨表一致性', 'DEF_CROSSTBL_NOTE_USER',
+--     18, 'THRESHOLD', 'CROSS_TABLE',
+--     {note表ID}, {user_id字段ID}, {user表ID}, {id字段ID},
+--     'CONSISTENCY',
+--     'SELECT COUNT(*) AS lookup_violation FROM ${table} t WHERE ${column} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM ${compare_table} l WHERE l.${compare_column} = t.${column})',
+--     0, NULL, NULL, 'HIGH', 'STRONG',
+--     30, '1', '0', 100, '1', NOW()
+-- );

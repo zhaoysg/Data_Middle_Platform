@@ -7,6 +7,7 @@ import org.dromara.metadata.domain.DqcRuleDef;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * 正则检查执行器
@@ -14,6 +15,8 @@ import java.util.Map;
  * 规则类型: REGEX
  * <p>
  * 检查目标列中不匹配正则表达式的值数量。
+ * <p>
+ * 元数据驱动：使用 MetadataContext 获取表名、字段名
  */
 @Slf4j
 public class RegexCheckExecutor extends AbstractRuleExecutor {
@@ -27,10 +30,22 @@ public class RegexCheckExecutor extends AbstractRuleExecutor {
 
     @Override
     public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), () -> false);
+    }
+
+    @Override
+    public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                        Supplier<Boolean> cancelChecker) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), cancelChecker);
+    }
+
+    @Override
+    public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                        MetadataContext context, Supplier<Boolean> cancelChecker) {
         long start = System.currentTimeMillis();
 
-        // 渲染SQL
-        String sql = renderSql(rule, adapter);
+        // 渲染SQL（使用元数据上下文）
+        String sql = renderSql(rule, adapter, context);
         detail.setExecuteSql(sql);
 
         try {

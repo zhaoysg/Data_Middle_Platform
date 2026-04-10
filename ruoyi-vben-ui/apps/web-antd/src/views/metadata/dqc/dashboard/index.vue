@@ -11,9 +11,11 @@ import {
   Descriptions,
   DescriptionsItem,
   Empty,
+  Popconfirm,
   Progress,
   Row,
   Select,
+  Space,
   Spin,
   Statistic,
   Table,
@@ -22,33 +24,38 @@ import {
   Timeline,
   Tooltip,
 } from 'ant-design-vue';
+import {
+  DownloadOutlined,
+  ReloadOutlined,
+  StopOutlined,
+} from '@ant-design/icons-vue';
 import { computed, onMounted, ref, watch } from 'vue';
 
-import { dqcExecutionList } from '#/api/metadata/dqc/execution';
-import { dqcScoreTrend } from '#/api/metadata/dqc/score';
-import type { DqcExecution, DqcQualityScore } from '#/api/metadata/model';
+import {
+  dqcExecutionList,
+  dqcExecutionRerun,
+  dqcExecutionStop,
+} from '#/api/metadata/dqc/execution';
+
+/** 内联评分趋势接口（已合并到驾驶舱，不再独立导出） */
+async function dqcScoreTrend(params?: { days?: number }) {
+  const url = '/system/metadata/dqc/score/trend';
+  const query = params?.days ? `?days=${params.days}` : '';
+  const res = await fetch(`${url}${query}`, { credentials: 'include' });
+  if (!res.ok) return [];
+  const data = await res.json();
+  return Array.isArray(data) ? data : [];
+}
 
 const loading = ref(false);
 const days = ref(30);
 const activeTab = ref('overview');
-const trendData = ref<DqcQualityScore[]>([]);
-const executionData = ref<DqcExecution[]>([]);
+const trendData = ref([]);
+const executionData = ref([]);
 
-// Filter (detail tab)
+// Filter (detail / execution tab)
 const filterLayer = ref<string>('');
 const filterStatus = ref<string>('');
-const dayOptions = [
-  { label: '近 7 天', value: 7 },
-  { label: '近 14 天', value: 14 },
-  { label: '近 30 天', value: 30 },
-  { label: '近 90 天', value: 90 },
-];
-const executionStatusOptions = [
-  { label: '成功', value: 'SUCCESS' },
-  { label: '失败', value: 'FAILED' },
-  { label: '部分失败', value: 'PARTIAL' },
-  { label: '运行中', value: 'RUNNING' },
-];
 
 // Chart refs
 const gaugeRef = ref<EchartsUIType>();
@@ -63,24 +70,38 @@ const { renderEcharts: renderRadar, updateData: updateRadar } = useEcharts(radar
 const { renderEcharts: renderBar, updateData: updateBar } = useEcharts(barRef);
 const { renderEcharts: renderLayerBar, updateData: updateLayerBar } = useEcharts(layerBarRef);
 
+const dayOptions = [
+  { label: '近 7 天', value: 7 },
+  { label: '近 14 天', value: 14 },
+  { label: '近 30 天', value: 30 },
+  { label: '近 90 天', value: 90 },
+];
+
+const executionStatusOptions = [
+  { label: '成功', value: 'SUCCESS' },
+  { label: '失败', value: 'FAILED' },
+  { label: '部分失败', value: 'PARTIAL' },
+  { label: '运行中', value: 'RUNNING' },
+];
+
 // ── Helpers ──────────────────────────────────────────────────────
 
-function getScoreColor(score?: number) {
-  if (score === undefined || score === null) return '#8c8c8c';
+function getScoreColor(score?: number | null) {
+  if (score === undefined || score === null) return '#9aa3b5';
   if (score >= 90) return '#52c41a';
   if (score >= 70) return '#faad14';
   return '#ff4d4f';
 }
 
-function getScoreTagColor(score?: number) {
+function getScoreTagColor(score?: number | null) {
   if (score === undefined || score === null) return 'default';
   if (score >= 90) return 'success';
   if (score >= 70) return 'warning';
   return 'error';
 }
 
-function getScoreLabel(score?: number) {
-  if (score === undefined || score === null) return '暂无评分';
+function getScoreLabel(score?: number | null) {
+  if (score === undefined || score === null) return '暂无数据';
   if (score >= 90) return '优秀';
   if (score >= 70) return '良好';
   if (score > 0) return '较差';
@@ -93,6 +114,7 @@ function getStatusColor(status?: string) {
     case 'FAILED': return 'error';
     case 'PARTIAL': return 'warning';
     case 'RUNNING': return 'processing';
+    case 'STOPPED': return 'default';
     default: return 'default';
   }
 }
@@ -103,6 +125,7 @@ function getStatusLabel(status?: string) {
     case 'FAILED': return '失败';
     case 'PARTIAL': return '部分失败';
     case 'RUNNING': return '运行中';
+    case 'STOPPED': return '已停止';
     default: return status || '—';
   }
 }
@@ -118,7 +141,7 @@ function avg(list: DqcQualityScore[], field: keyof DqcQualityScore): number {
 function avgExec(list: DqcExecution[], field: keyof DqcExecution): number {
   const vals = list
     .filter((r) => r.status !== 'RUNNING')
-    .map((r) => r[field])
+    .map((r) => r[field as keyof DqcExecution])
     .filter((v): v is number => typeof v === 'number' && Number.isFinite(v));
   if (vals.length === 0) return 0;
   return Math.round((vals.reduce((s, v) => s + v, 0) / vals.length) * 10) / 10;
@@ -130,7 +153,20 @@ function fmtElapsed(ms?: number) {
   return `${Math.floor(ms / 60000)}分${Math.round((ms % 60000) / 1000)}秒`;
 }
 
-// ── Exec stats (from dqc_execution) ──────────────────────────────
+function layerTagColor(layer?: string) {
+  if (!layer) return 'default';
+  const map: Record<string, string> = {
+    ODS: 'orange',
+    DWD: 'blue',
+    DWS: 'cyan',
+    ADS: 'purple',
+    DIM: 'geekblue',
+    ALL: 'default',
+  };
+  return map[layer.toUpperCase()] || 'processing';
+}
+
+// ── Exec stats ───────────────────────────────────────────────────
 
 const execOverview = computed(() => {
   const list = executionData.value;
@@ -157,7 +193,7 @@ const execOverview = computed(() => {
   return { total, success, failed, partial, running, avgScore, avgPassRate, totalRules, alertCount, planCount: planSet.size, layerCount: layerSet.size };
 });
 
-// ── Score overview (from dqc_quality_score trend) ────────────────
+// ── Score overview ──────────────────────────────────────────────
 
 const scoreOverview = computed(() => {
   const data = trendData.value;
@@ -170,30 +206,21 @@ const scoreOverview = computed(() => {
   return { avgOverall, avgPassRate, totalTables: tables, alertCount };
 });
 
-// Use whichever has data
-const effectiveOverall = computed(() => {
-  return scoreOverview.value.avgOverall || execOverview.value.avgScore;
-});
+const effectiveOverall = computed(() => scoreOverview.value.avgOverall || execOverview.value.avgScore);
+const effectivePassRate = computed(() => scoreOverview.value.avgPassRate || execOverview.value.avgPassRate);
+const effectiveAlert = computed(() => scoreOverview.value.alertCount || execOverview.value.alertCount);
 
-const effectivePassRate = computed(() => {
-  return scoreOverview.value.avgPassRate || execOverview.value.avgPassRate;
-});
-
-const effectiveAlert = computed(() => {
-  return scoreOverview.value.alertCount || execOverview.value.alertCount;
-});
-
-// ── Six dimensions ───────────────────────────────────────────────
+// ── Six dimensions ──────────────────────────────────────────────
 
 const dimensions = computed(() => {
   const data = trendData.value;
   const defs = [
-    { label: '完整性', field: 'completenessScore' as keyof DqcQualityScore },
-    { label: '唯一性', field: 'uniquenessScore' as keyof DqcQualityScore },
-    { label: '准确性', field: 'accuracyScore' as keyof DqcQualityScore },
-    { label: '一致性', field: 'consistencyScore' as keyof DqcQualityScore },
-    { label: '时效性', field: 'timelinessScore' as keyof DqcQualityScore },
-    { label: '有效性', field: 'validityScore' as keyof DqcQualityScore },
+    { label: '完整性', field: 'completenessScore' as keyof DqcQualityScore, accent: 'dim-accent--blue', icon: 'shield' as const },
+    { label: '唯一性', field: 'uniquenessScore' as keyof DqcQualityScore, accent: 'dim-accent--green', icon: 'lock' as const },
+    { label: '准确性', field: 'accuracyScore' as keyof DqcQualityScore, accent: 'dim-accent--orange', icon: 'bolt' as const },
+    { label: '一致性', field: 'consistencyScore' as keyof DqcQualityScore, accent: 'dim-accent--purple', icon: 'swap' as const },
+    { label: '及时性', field: 'timelinessScore' as keyof DqcQualityScore, accent: 'dim-accent--teal', icon: 'clock' as const },
+    { label: '有效性', field: 'validityScore' as keyof DqcQualityScore, accent: 'dim-accent--red', icon: 'check' as const },
   ];
   return defs.map((d) => ({ ...d, value: avg(data, d.field) }));
 });
@@ -219,7 +246,7 @@ const layerStats = computed(() => {
   })).sort((a, b) => b.avgScore - a.avgScore);
 });
 
-// ── Execution history ──────────────────────────────────────────
+// ── Execution history ────────────────────────────────────────────
 
 const recentExecutions = computed(() => {
   return [...executionData.value]
@@ -231,7 +258,7 @@ const recentExecutions = computed(() => {
     .slice(0, 10);
 });
 
-// ── Filtered executions (detail tab) ───────────────────────────
+// ── Filtered executions ─────────────────────────────────────────
 
 const filteredExecutions = computed(() => {
   return [...executionData.value]
@@ -247,46 +274,85 @@ const filteredExecutions = computed(() => {
     });
 });
 
-// Layer options for filter
 const layerOptions = computed(() => {
   const set = new Set(executionData.value.map((r) => r.layerCode).filter(Boolean));
   return [...set].map((v) => ({ label: v, value: v }));
 });
 
-// ── Chart options ───────────────────────────────────────────────
+// ── Chart options ────────────────────────────────────────────────
 
-// Gauge
+// Gauge (质量评分页面样式：渐变色进度条)
 const gaugeOption = computed(() => {
   const score = effectiveOverall.value;
+  const has = score > 0;
   const color = getScoreColor(score);
+  const lineWidth = 14;
   return {
     series: [{
       type: 'gauge',
-      startAngle: 200, endAngle: -20,
-      min: 0, max: 100, splitNumber: 5,
-      itemStyle: { color },
-      progress: { show: true, width: 22 },
+      center: ['50%', '60%'],
+      radius: '92%',
+      startAngle: 200,
+      endAngle: -20,
+      min: 0,
+      max: 100,
+      splitNumber: 5,
       pointer: { show: false },
-      axisLine: { lineStyle: { width: 22, color: [[1, '#f0f0f0']] } },
+      axisLine: {
+        roundCap: true,
+        lineStyle: {
+          width: lineWidth,
+          color: has
+            ? [
+                [0.25, '#ff7875'],
+                [0.5, '#ffd666'],
+                [0.78, '#b7eb8f'],
+                [1, '#389e0d'],
+              ]
+            : [[1, '#e4e8f0']],
+        },
+      },
+      progress: {
+        show: has,
+        roundCap: true,
+        width: lineWidth,
+        itemStyle: {
+          color: {
+            type: 'linear',
+            x: 0, y: 0, x2: 1, y2: 0,
+            colorStops: has
+              ? [
+                  { offset: 0, color: '#ff7875' },
+                  { offset: 0.45, color: '#faad14' },
+                  { offset: 1, color: '#52c41a' },
+                ]
+              : [{ offset: 0, color: '#e4e8f0' }, { offset: 1, color: '#e4e8f0' }],
+          },
+        },
+      },
       axisTick: { show: false },
       splitLine: { show: false },
       axisLabel: { show: false },
       anchor: { show: false },
       title: { show: false },
       detail: {
-        valueAnimation: true,
-        offsetCenter: [0, '0%'],
-        fontSize: 56,
-        fontWeight: 'bold',
-        formatter: '{value}',
+        valueAnimation: has,
+        offsetCenter: [0, '2%'],
+        fontSize: has ? 42 : 30,
+        fontWeight: 700,
+        formatter: (val: number | string) => {
+          if (!has) return '—';
+          const n = typeof val === 'number' ? val : Number(val);
+          return Number.isFinite(n) ? n.toFixed(1) : '—';
+        },
         color,
       },
-      data: [{ value: score || 0 }],
+      data: [{ value: has ? Math.min(100, Math.max(0, score)) : 0 }],
     }],
   };
 });
 
-// Trend (only available if score data exists)
+// Trend
 const trendOption = computed(() => {
   if (trendData.value.length === 0) return {};
   const dates = trendData.value.map((r) => r.checkDate?.slice(5) || '');
@@ -294,22 +360,50 @@ const trendOption = computed(() => {
   const passRates = trendData.value.map((r) => r.rulePassRate || 0);
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'cross' } },
-    legend: { data: ['综合评分', '规则通过率'], bottom: 0 },
-    grid: { top: 8, right: 16, bottom: 40, left: 48 },
-    xAxis: { type: 'category', data: dates, axisLabel: { fontSize: 10 } },
+    legend: { data: ['综合评分', '规则通过率'], bottom: 0, textStyle: { color: '#64748b', fontSize: 11 } },
+    grid: { top: 14, right: 20, bottom: 44, left: 52, containLabel: false },
+    xAxis: {
+      type: 'category',
+      data: dates,
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 11, color: '#94a3b8' },
+    },
     yAxis: [
-      { type: 'value', name: '评分', min: 0, max: 100, axisLabel: { formatter: '{value}' } },
-      { type: 'value', name: '通过率', min: 0, max: 100, axisLabel: { formatter: '{value}%' } },
+      {
+        type: 'value', name: '评分', min: 0, max: 100,
+        splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+        axisLabel: { formatter: '{value}', color: '#94a3b8', fontSize: 11 },
+        nameTextStyle: { color: '#94a3b8', fontSize: 11, padding: [0, 0, 0, 8] },
+      },
+      {
+        type: 'value', name: '通过率', min: 0, max: 100,
+        splitLine: { show: false },
+        axisLabel: { formatter: '{value}%', color: '#94a3b8', fontSize: 11 },
+        nameTextStyle: { color: '#94a3b8', fontSize: 11, padding: [0, 8, 0, 0] },
+      },
     ],
     series: [
       {
-        name: '综合评分', type: 'line', data: scores, smooth: true,
-        lineStyle: { width: 3 }, itemStyle: { color: '#5470c6' },
-        areaStyle: { color: 'rgba(84,112,198,0.15)' },
+        name: '综合评分', type: 'line', data: scores, smooth: 0.35,
+        symbol: 'circle', symbolSize: 6,
+        lineStyle: { width: 2.5, cap: 'round', join: 'round' },
+        itemStyle: { color: '#4f6ef7', borderColor: '#fff', borderWidth: 1 },
+        areaStyle: {
+          color: {
+            type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+            colorStops: [
+              { offset: 0, color: 'rgba(79,110,247,0.22)' },
+              { offset: 1, color: 'rgba(79,110,247,0.02)' },
+            ],
+          },
+        },
       },
       {
-        name: '规则通过率', type: 'line', yAxisIndex: 1, data: passRates, smooth: true,
-        lineStyle: { width: 2, type: 'dashed' }, itemStyle: { color: '#91cc75' },
+        name: '规则通过率', type: 'line', yAxisIndex: 1, data: passRates, smooth: 0.35,
+        symbol: 'circle', symbolSize: 5,
+        lineStyle: { width: 2, type: 'dashed', cap: 'round' },
+        itemStyle: { color: '#34b27b', borderColor: '#fff', borderWidth: 1 },
       },
     ],
   };
@@ -325,9 +419,9 @@ const radarOption = computed(() => {
       indicator: [
         { name: '完整性', max: 100 }, { name: '唯一性', max: 100 },
         { name: '准确性', max: 100 }, { name: '一致性', max: 100 },
-        { name: '时效性', max: 100 }, { name: '有效性', max: 100 },
+        { name: '及时性', max: 100 }, { name: '有效性', max: 100 },
       ],
-      radius: '65%',
+      radius: '68%',
       axisName: { color: '#555', fontSize: 11 },
     },
     series: [{
@@ -339,21 +433,21 @@ const radarOption = computed(() => {
           avg(data, 'timelinessScore'), avg(data, 'validityScore'),
         ],
         name: '六维得分',
-        areaStyle: { color: 'rgba(84,112,198,0.2)' },
-        lineStyle: { color: '#5470c6', width: 2 },
-        itemStyle: { color: '#5470c6' },
+        areaStyle: { color: 'rgba(79,110,247,0.18)' },
+        lineStyle: { color: '#4f6ef7', width: 2 },
+        itemStyle: { color: '#4f6ef7' },
       }],
     }],
   };
 });
 
-// Layer bar chart
+// Layer bar
 const layerBarOption = computed(() => {
   if (layerStats.value.length === 0) return {};
   return {
     tooltip: { trigger: 'axis', axisPointer: { type: 'shadow' } },
     legend: { data: ['平均评分', '通过率(%)'], bottom: 0 },
-    grid: { top: 8, right: 60, bottom: 40, left: 10, containLabel: true },
+    grid: { top: 8, right: 60, bottom: 44, left: 10, containLabel: true },
     xAxis: { type: 'category', data: layerStats.value.map((d) => d.layer) },
     yAxis: [
       { type: 'value', name: '评分', min: 0, max: 100 },
@@ -373,14 +467,14 @@ const layerBarOption = computed(() => {
         name: '通过率(%)', type: 'line', yAxisIndex: 1,
         data: layerStats.value.map((d) => d.passRate),
         smooth: true, lineStyle: { width: 2 },
-        itemStyle: { color: '#91cc75' },
-        label: { show: true, position: 'bottom', formatter: '{c}%', fontSize: 10, color: '#91cc75' },
+        itemStyle: { color: '#34b27b' },
+        label: { show: true, position: 'bottom', formatter: '{c}%', fontSize: 10, color: '#34b27b' },
       },
     ],
   };
 });
 
-// Score bar chart (top tables)
+// Score bar (top tables)
 const scoreBarOption = computed(() => {
   const data = [...trendData.value]
     .filter((r) => r.overallScore !== undefined)
@@ -407,39 +501,80 @@ const scoreBarOption = computed(() => {
   };
 });
 
-// ── Execution table columns ─────────────────────────────────────
+// ── Exec table columns ──────────────────────────────────────────
 
 const execColumns = [
-  {
-    title: '执行编号', dataIndex: 'executionNo', key: 'executionNo',
-    width: 160, ellipsis: true,
-  },
-  {
-    title: '质检方案', dataIndex: 'planName', key: 'planName',
-    width: 160, ellipsis: true,
-  },
-  {
-    title: '层级', dataIndex: 'layerCode', key: 'layerCode', width: 80, align: 'center' as const,
-  },
-  {
-    title: '触发', dataIndex: 'triggerType', key: 'triggerType', width: 80, align: 'center' as const,
-  },
-  {
-    title: '状态', dataIndex: 'status', key: 'status', width: 100, align: 'center' as const,
-  },
-  {
-    title: '综合评分', dataIndex: 'overallScore', key: 'overallScore', width: 110, align: 'center' as const,
-  },
-  {
-    title: '规则通过', key: 'ruleResult', width: 130, align: 'center' as const,
-  },
-  {
-    title: '耗时', key: 'elapsed', width: 90, align: 'center' as const,
-  },
-  {
-    title: '开始时间', dataIndex: 'startTime', key: 'startTime', width: 160,
-  },
+  { title: '执行编号', dataIndex: 'executionNo', key: 'executionNo', width: 170, ellipsis: true },
+  { title: '质检方案', dataIndex: 'planName', key: 'planName', width: 160, ellipsis: true },
+  { title: '数据层', dataIndex: 'layerCode', key: 'layerCode', width: 80, align: 'center' as const },
+  { title: '触发', dataIndex: 'triggerType', key: 'triggerType', width: 80, align: 'center' as const },
+  { title: '状态', dataIndex: 'status', key: 'status', width: 100, align: 'center' as const },
+  { title: '综合评分', dataIndex: 'overallScore', key: 'overallScore', width: 110, align: 'center' as const },
+  { title: '规则通过', key: 'ruleResult', width: 140, align: 'center' as const },
+  { title: '耗时', key: 'elapsed', width: 90, align: 'center' as const },
+  { title: '开始时间', dataIndex: 'startTime', key: 'startTime', width: 160 },
+  { title: '操作', key: 'action', width: 160, fixed: 'right' as const, align: 'center' as const },
 ];
+
+// ── Export report ────────────────────────────────────────────────
+
+function exportReport() {
+  const rows = trendData.value;
+  if (rows.length === 0) {
+    return;
+  }
+  const map = new Map<string, DqcQualityScore>();
+  for (const r of rows) {
+    const key = `${r.targetDsId}-${r.targetTable}`;
+    if (!map.has(key)) {
+      map.set(key, r);
+    } else {
+      const existing = map.get(key)!;
+      if (r.checkDate && existing.checkDate && r.checkDate > existing.checkDate) {
+        map.set(key, r);
+      }
+    }
+  }
+  const tableList = [...map.values()];
+  const headers = [
+    '数据层', '数据源', '目标表', '综合评分', '规则通过率',
+    '通过数', '规则总数', '完整性', '唯一性', '准确性',
+    '一致性', '及时性', '有效性', '检查日期',
+  ];
+  const lines = tableList.map((r) => {
+    const pass = r.rulePassCount !== undefined && r.rulePassCount !== null
+      ? r.rulePassCount
+      : Math.max(0, (r.ruleTotalCount || 0) - (r.ruleFailCount || 0));
+    return [
+      r.layerCode || '',
+      r.dsName || '未知数据源',
+      r.targetTable || '',
+      r.overallScore ?? '',
+      r.rulePassRate ?? '',
+      pass,
+      r.ruleTotalCount || 0,
+      r.completenessScore ?? '',
+      r.uniquenessScore ?? '',
+      r.accuracyScore ?? '',
+      r.consistencyScore ?? '',
+      r.timelinessScore ?? '',
+      r.validityScore ?? '',
+      r.checkDate || '',
+    ].map((c) => `"${String(c).replace(/"/g, '""')}"`).join(',');
+  });
+  const bom = '\uFEFF';
+  const csv = bom + [headers.join(','), ...lines].join('\r\n');
+  const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const now = new Date();
+  const pad = (n: number) => String(n).padStart(2, '0');
+  const filename = `质量评分报告_${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}_${pad(now.getHours())}${pad(now.getMinutes())}.csv`;
+  a.download = filename;
+  a.click();
+  URL.revokeObjectURL(url);
+}
 
 // ── Data loading ────────────────────────────────────────────────
 
@@ -448,7 +583,7 @@ async function loadData() {
   try {
     const [scoreRes, execRes] = await Promise.all([
       dqcScoreTrend({ days: days.value }).catch(() => []),
-      dqcExecutionList({ pageNum: 1, pageSize: 100 }).catch(() => ({ rows: [] })),
+      dqcExecutionList({ pageNum: 1, pageSize: 500 }).catch(() => ({ rows: [] })),
     ]);
     trendData.value = Array.isArray(scoreRes) ? scoreRes : (scoreRes?.rows ?? []);
     executionData.value = execRes?.rows ?? execRes ?? [];
@@ -486,16 +621,28 @@ watch(activeTab, (tab) => {
 });
 
 onMounted(() => {
-  loadData();
+  void loadData();
   setTimeout(() => renderCharts(), 200);
 });
+
+// ── Execution actions ────────────────────────────────────────────
+
+async function handleRerun(row: DqcExecution) {
+  await dqcExecutionRerun(row.id!);
+  await loadData();
+}
+
+async function handleStop(row: DqcExecution) {
+  await dqcExecutionStop(row.id!);
+  await loadData();
+}
 </script>
 
 <template>
   <Page :auto-content-height="true">
     <Spin :spinning="loading">
 
-      <!-- Page header -->
+      <!-- 页头 -->
       <div class="dq-header">
         <div class="dq-header-left">
           <div class="dq-icon">
@@ -517,13 +664,20 @@ onMounted(() => {
           </div>
         </div>
         <div class="dq-header-right">
+          <Button @click="exportReport" :disabled="trendData.length === 0" title="导出 CSV 报告">
+            <template #icon><DownloadOutlined /></template>
+            导出报告
+          </Button>
           <Select
             v-model:value="days"
             :options="dayOptions"
             style="width: 120px"
             @change="loadData"
           />
-          <Button type="primary" @click="loadData">刷新</Button>
+          <Button type="primary" @click="loadData">
+            <template #icon><ReloadOutlined /></template>
+            刷新
+          </Button>
         </div>
       </div>
 
@@ -571,25 +725,22 @@ onMounted(() => {
 
         <!-- KPI row -->
         <Row :gutter="16" class="kpi-row">
-
-          <!-- Main gauge -->
+          <!-- Gauge -->
           <Col :span="5">
             <Card class="kpi-main-card" :bordered="false">
               <div class="kpi-gauge-wrap">
-                <EchartsUI ref="gaugeRef" style="height: 130px" />
+                <EchartsUI ref="gaugeRef" style="height: 150px" />
               </div>
               <div class="kpi-gauge-label" :style="{ color: getScoreColor(effectiveOverall) }">
                 {{ getScoreLabel(effectiveOverall) }}
               </div>
               <div class="kpi-gauge-title">综合质量评分</div>
-              <div class="kpi-gauge-source">
-                <span v-if="trendData.length > 0">来自 {{ scoreOverview.totalTables }} 张表的评分数据</span>
-                <span v-else>来自 {{ execOverview.total }} 次执行记录</span>
+              <div class="kpi-gauge-meta">
+                <span>规则通过率 <strong :style="{ color: getScoreColor(effectivePassRate) }">{{ effectivePassRate }}%</strong></span>
               </div>
             </Card>
           </Col>
-
-          <!-- Stat cards -->
+          <!-- Stats -->
           <Col :span="19">
             <Row :gutter="16" style="height: 100%">
               <Col :span="4">
@@ -599,21 +750,10 @@ onMounted(() => {
                       <path d="M10 2 L12.5 7.5 L18 8 L14 12 L15 18 L10 15 L5 18 L6 12 L2 8 L7.5 7.5 Z" fill="#fff" opacity="0.9"/>
                     </svg>
                   </div>
-                  <Statistic
-                    title="平均通过率"
-                    :value="effectivePassRate"
-                    suffix="%"
-                    :value-style="{ color: getScoreColor(effectivePassRate), fontSize: '26px' }"
-                  />
-                  <Progress
-                    :percent="effectivePassRate"
-                    :stroke-color="getScoreColor(effectivePassRate)"
-                    :show-info="false" size="small"
-                    style="margin-top: 6px"
-                  />
+                  <Statistic title="平均通过率" :value="effectivePassRate" suffix="%" :value-style="{ color: getScoreColor(effectivePassRate), fontSize: '26px' }" />
+                  <Progress :percent="effectivePassRate" :stroke-color="getScoreColor(effectivePassRate)" :show-info="false" size="small" style="margin-top: 6px" />
                 </Card>
               </Col>
-
               <Col :span="4">
                 <Card class="kpi-stat-card" :bordered="false">
                   <div class="stat-icon-wrap stat-icon--blue">
@@ -624,7 +764,6 @@ onMounted(() => {
                   <Statistic title="被监控表数" :value="scoreOverview.totalTables" :value-style="{ fontSize: '26px' }"/>
                 </Card>
               </Col>
-
               <Col :span="4">
                 <Card class="kpi-stat-card" :bordered="false">
                   <div class="stat-icon-wrap stat-icon--orange">
@@ -635,7 +774,6 @@ onMounted(() => {
                   <Statistic title="质检规则总数" :value="execOverview.totalRules" :value-style="{ fontSize: '26px' }"/>
                 </Card>
               </Col>
-
               <Col :span="4">
                 <Card class="kpi-stat-card" :bordered="false">
                   <div class="stat-icon-wrap stat-icon--purple">
@@ -647,31 +785,21 @@ onMounted(() => {
                   <Statistic title="执行次数" :value="execOverview.total" :value-style="{ fontSize: '26px' }"/>
                 </Card>
               </Col>
-
               <Col :span="4">
-                <Card
-                  class="kpi-stat-card"
-                  :class="{ 'kpi-alert-active': effectiveAlert > 0 }"
-                  :bordered="false"
-                >
-                  <div class="stat-icon-wrap" :class="effectiveAlert > 0 ? 'stat-icon--red' : 'stat-icon--gray'">
+                <Card class="kpi-stat-card" :bordered="false">
+                  <div class="stat-icon-wrap stat-icon--red">
                     <svg width="20" height="20" viewBox="0 0 20 20" fill="none">
                       <path d="M10 4 L17 16 L3 16 Z" stroke="#fff" stroke-width="1.5" opacity="0.9"/>
                       <path d="M10 8 L10 12" stroke="#fff" stroke-width="2" stroke-linecap="round"/>
                       <circle cx="10" cy="14" r="0.8" fill="#fff"/>
                     </svg>
                   </div>
-                  <Statistic
-                    title="预警数"
-                    :value="effectiveAlert"
-                    :value-style="{ color: effectiveAlert > 0 ? '#ff4d4f' : '#52c41a', fontSize: '26px' }"
-                  />
+                  <Statistic title="预警数" :value="effectiveAlert" :value-style="{ color: effectiveAlert > 0 ? '#ff4d4f' : '#52c41a', fontSize: '26px' }" />
                   <div class="stat-sub-text" :style="{ color: effectiveAlert > 0 ? '#ff4d4f' : '#52c41a' }">
                     {{ effectiveAlert > 0 ? '评分 &lt; 70 分' : '质量正常' }}
                   </div>
                 </Card>
               </Col>
-
               <Col :span="4">
                 <Card class="kpi-stat-card" :bordered="false">
                   <div class="stat-icon-wrap stat-icon--teal">
@@ -679,66 +807,44 @@ onMounted(() => {
                       <path d="M3 14 L7 9 L10 12 L14 6 L17 10" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
                     </svg>
                   </div>
-                  <Statistic
-                    title="质检方案数"
-                    :value="execOverview.planCount"
-                    :value-style="{ fontSize: '26px' }"
-                  />
-                  <div class="stat-sub-text" style="color: #8c8c8c">
-                    覆盖 {{ execOverview.layerCount }} 个层级
-                  </div>
+                  <Statistic title="质检方案数" :value="execOverview.planCount" :value-style="{ fontSize: '26px' }"/>
+                  <div class="stat-sub-text" style="color: #8c8c8c">覆盖 {{ execOverview.layerCount }} 个层级</div>
                 </Card>
               </Col>
             </Row>
           </Col>
         </Row>
 
-        <!-- Execution status summary -->
-        <Row :gutter="16" class="exec-status-row">
+        <!-- Exec status chips -->
+        <Row :gutter="12" class="exec-status-row">
           <Col :span="3">
-            <div class="exec-status-chip exec-chip--success">
-              <Badge status="success"/>
-              成功 {{ execOverview.success }}
-            </div>
+            <div class="exec-status-chip exec-chip--success"><Badge status="success"/>成功 {{ execOverview.success }}</div>
           </Col>
           <Col :span="3">
-            <div class="exec-status-chip exec-chip--partial">
-              <Badge status="warning"/>
-              部分失败 {{ execOverview.partial }}
-            </div>
+            <div class="exec-status-chip exec-chip--partial"><Badge status="warning"/>部分失败 {{ execOverview.partial }}</div>
           </Col>
           <Col :span="3">
-            <div class="exec-status-chip exec-chip--failed">
-              <Badge status="error"/>
-              失败 {{ execOverview.failed }}
-            </div>
+            <div class="exec-status-chip exec-chip--failed"><Badge status="error"/>失败 {{ execOverview.failed }}</div>
           </Col>
           <Col :span="3">
-            <div class="exec-status-chip exec-chip--running">
-              <Badge status="processing"/>
-              运行中 {{ execOverview.running }}
-            </div>
+            <div class="exec-status-chip exec-chip--running"><Badge status="processing"/>运行中 {{ execOverview.running }}</div>
           </Col>
         </Row>
 
         <!-- Main charts -->
         <Row :gutter="16" class="chart-row">
-
-          <!-- Trend (score data) or execution history timeline -->
+          <!-- Trend -->
           <Col :span="15">
             <Card class="chart-card" :bordered="false">
               <template #title>
                 <span class="chart-title">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 6px">
-                    <path d="M2 11 L5 7 L8 9 L12 4" stroke="#5470c6" stroke-width="1.5" stroke-linecap="round"/>
+                    <path d="M2 11 L5 7 L8 9 L12 4" stroke="#4f6ef7" stroke-width="1.5" stroke-linecap="round"/>
                   </svg>
                   {{ trendData.length > 0 ? '评分与通过率趋势' : '最近执行记录' }}
                 </span>
               </template>
-              <template #extra>
-                <span style="font-size: 12px; color: #8c8c8c">近 {{ days }} 天</span>
-              </template>
-
+              <template #extra><span style="font-size: 12px; color: #8c8c8c">近 {{ days }} 天</span></template>
               <template v-if="trendData.length > 0">
                 <EchartsUI ref="trendRef" style="height: 260px" />
               </template>
@@ -755,12 +861,8 @@ onMounted(() => {
                       <span class="timeline-layer">{{ exec.layerCode || '—' }}</span>
                     </div>
                     <div class="timeline-bottom">
-                      <span class="timeline-score" v-if="exec.overallScore" :style="{ color: getScoreColor(exec.overallScore) }">
-                        评分 {{ exec.overallScore }}分
-                      </span>
-                      <span class="timeline-rules" v-if="exec.totalRules">
-                        {{ exec.passedCount }}/{{ exec.totalRules }} 规则通过
-                      </span>
+                      <span class="timeline-score" v-if="exec.overallScore" :style="{ color: getScoreColor(exec.overallScore) }">评分 {{ exec.overallScore }}分</span>
+                      <span class="timeline-rules" v-if="exec.totalRules">{{ exec.passedCount || 0 }}/{{ exec.totalRules }} 规则通过</span>
                       <span class="timeline-time">{{ exec.startTime?.slice(0, 16) || '—' }}</span>
                     </div>
                   </div>
@@ -768,86 +870,62 @@ onMounted(() => {
               </Timeline>
             </Card>
           </Col>
-
           <!-- Radar -->
           <Col :span="9">
             <Card class="chart-card" :bordered="false">
               <template #title>
                 <span class="chart-title">
                   <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style="margin-right: 6px">
-                    <circle cx="7" cy="7" r="5.5" stroke="#5470c6" stroke-width="1.5"/>
-                    <circle cx="7" cy="7" r="3" stroke="#5470c6" stroke-width="1" opacity="0.5"/>
-                    <circle cx="7" cy="7" r="1" fill="#5470c6"/>
+                    <circle cx="7" cy="7" r="5.5" stroke="#4f6ef7" stroke-width="1.5"/>
+                    <circle cx="7" cy="7" r="3" stroke="#4f6ef7" stroke-width="1" opacity="0.5"/>
+                    <circle cx="7" cy="7" r="1" fill="#4f6ef7"/>
                   </svg>
                   {{ trendData.length > 0 ? '六维质量雷达' : '执行统计' }}
                 </span>
               </template>
-
               <template v-if="trendData.length > 0">
                 <EchartsUI ref="radarRef" style="height: 260px" />
               </template>
               <div v-else class="exec-stats-empty">
-                <div class="exec-stat-row">
-                  <span class="exec-stat-label">总执行</span>
-                  <span class="exec-stat-val">{{ execOverview.total }}</span>
-                </div>
-                <div class="exec-stat-row">
-                  <span class="exec-stat-label">成功率</span>
-                  <span class="exec-stat-val" :style="{ color: getScoreColor(execOverview.total > 0 ? (execOverview.success / execOverview.total * 100) : 0) }">
-                    {{ execOverview.total > 0 ? Math.round(execOverview.success / execOverview.total * 100) : 0 }}%
-                  </span>
-                </div>
-                <div class="exec-stat-row">
-                  <span class="exec-stat-label">失败率</span>
-                  <span class="exec-stat-val" style="color: #ff4d4f">
-                    {{ execOverview.total > 0 ? Math.round(execOverview.failed / execOverview.total * 100) : 0 }}%
-                  </span>
-                </div>
-                <div class="exec-stat-row">
-                  <span class="exec-stat-label">平均评分</span>
-                  <span class="exec-stat-val" :style="{ color: getScoreColor(execOverview.avgScore) }">
-                    {{ execOverview.avgScore || '—' }}
-                  </span>
-                </div>
-                <div class="exec-stat-row">
-                  <span class="exec-stat-label">质检方案</span>
-                  <span class="exec-stat-val">{{ execOverview.planCount }} 个</span>
-                </div>
-                <div class="exec-stat-row">
-                  <span class="exec-stat-label">覆盖层级</span>
-                  <span class="exec-stat-val">{{ execOverview.layerCount }} 个</span>
-                </div>
+                <div class="exec-stat-row"><span class="exec-stat-label">总执行</span><span class="exec-stat-val">{{ execOverview.total }}</span></div>
+                <div class="exec-stat-row"><span class="exec-stat-label">成功率</span><span class="exec-stat-val" :style="{ color: getScoreColor(execOverview.total > 0 ? (execOverview.success / execOverview.total * 100) : 0) }">{{ execOverview.total > 0 ? Math.round((execOverview.success / execOverview.total) * 100) : 0 }}%</span></div>
+                <div class="exec-stat-row"><span class="exec-stat-label">失败率</span><span class="exec-stat-val" style="color: #ff4d4f">{{ execOverview.total > 0 ? Math.round((execOverview.failed / execOverview.total) * 100) : 0 }}%</span></div>
+                <div class="exec-stat-row"><span class="exec-stat-label">平均评分</span><span class="exec-stat-val" :style="{ color: getScoreColor(execOverview.avgScore) }">{{ execOverview.avgScore || '—' }}</span></div>
+                <div class="exec-stat-row"><span class="exec-stat-label">质检方案</span><span class="exec-stat-val">{{ execOverview.planCount }} 个</span></div>
+                <div class="exec-stat-row"><span class="exec-stat-label">覆盖层级</span><span class="exec-stat-val">{{ execOverview.layerCount }} 个</span></div>
               </div>
             </Card>
           </Col>
         </Row>
 
-        <!-- Dimension pills + layer bar -->
+        <!-- Six dimension cards + layer bar -->
         <Row :gutter="16" class="chart-row">
+          <!-- Six dim cards (质量评分样式) -->
           <Col :span="12">
             <Card class="chart-card" :bordered="false">
-              <template #title>
-                <span class="chart-title">六维质量得分</span>
-              </template>
+              <template #title><span class="chart-title">六维质量得分</span></template>
               <div class="dim-grid">
-                <div v-for="dim in dimensions" :key="dim.label" class="dim-item">
+                <div v-for="dim in dimensions" :key="dim.label" class="dim-item" :class="dim.accent">
+                  <div class="dim-item-icon" aria-hidden="true">
+                    <svg v-if="dim.icon === 'shield'" class="dim-svg" viewBox="0 0 24 24" fill="none"><path d="M12 3L5 6v6c0 4.5 3.5 8 7 9 3.5-1 7-4.5 7-9V6l-7-3z" stroke="currentColor" stroke-width="1.6"/></svg>
+                    <svg v-else-if="dim.icon === 'lock'" class="dim-svg" viewBox="0 0 24 24" fill="none"><rect x="5" y="10" width="14" height="11" rx="2" stroke="currentColor" stroke-width="1.6"/><path d="M8 10V7a4 4 0 018 0v3" stroke="currentColor" stroke-width="1.6"/></svg>
+                    <svg v-else-if="dim.icon === 'bolt'" class="dim-svg" viewBox="0 0 24 24" fill="none"><path d="M13 2L4 14h7l-1 8 10-12h-7l0-8z" stroke="currentColor" stroke-width="1.4" stroke-linejoin="round"/></svg>
+                    <svg v-else-if="dim.icon === 'swap'" class="dim-svg" viewBox="0 0 24 24" fill="none"><path d="M7 7h13M17 3l4 4-4 4M17 17H4M7 21l-4-4 4-4" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+                    <svg v-else-if="dim.icon === 'clock'" class="dim-svg" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M12 7v6l4 2" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                    <svg v-else class="dim-svg" viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="9" stroke="currentColor" stroke-width="1.6"/><path d="M8 12l2.5 2.5L16 9" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/></svg>
+                  </div>
                   <div class="dim-label">{{ dim.label }}</div>
-                  <div class="dim-value" :style="{ color: getScoreColor(dim.value) }">{{ dim.value }}</div>
-                  <Progress
-                    :percent="dim.value"
-                    :stroke-color="getScoreColor(dim.value)"
-                    :show-info="false" size="small"
-                  />
+                  <div class="dim-value" :style="trendData.length > 0 ? { color: getScoreColor(dim.value) } : { color: '#a8b0c2' }">
+                    {{ trendData.length > 0 ? dim.value.toFixed(1) : '—' }}
+                  </div>
                 </div>
               </div>
             </Card>
           </Col>
-
+          <!-- Layer bar -->
           <Col :span="12">
             <Card class="chart-card" :bordered="false">
-              <template #title>
-                <span class="chart-title">数仓分层质量对比</span>
-              </template>
+              <template #title><span class="chart-title">数仓分层质量对比</span></template>
               <template v-if="layerStats.length > 0">
                 <EchartsUI ref="layerBarRef" style="height: 200px" />
               </template>
@@ -860,12 +938,8 @@ onMounted(() => {
         <Row :gutter="16" class="chart-row" v-if="trendData.length > 0">
           <Col :span="24">
             <Card class="chart-card" :bordered="false">
-              <template #title>
-                <span class="chart-title">表质量排行 TOP 10</span>
-              </template>
-              <template #extra>
-                <span style="font-size: 12px; color: #8c8c8c">按综合评分从高到低</span>
-              </template>
+              <template #title><span class="chart-title">表质量排行 TOP 10</span></template>
+              <template #extra><span style="font-size: 12px; color: #8c8c8c">按综合评分从高到低</span></template>
               <EchartsUI ref="barRef" style="height: 220px" />
             </Card>
           </Col>
@@ -875,45 +949,47 @@ onMounted(() => {
       <!-- ── EXECUTIONS TAB ── -->
       <div v-show="activeTab === 'executions'">
         <Card class="table-card" :bordered="false">
+          <template #extra><span style="font-size: 13px; color: #8c8c8c">共 {{ filteredExecutions.length }} 条记录</span></template>
           <Table
             :columns="execColumns"
             :data-source="filteredExecutions"
             :pagination="{ pageSize: 10, showSizeChanger: true, showTotal: (t: number) => `共 ${t} 条` }"
             size="small"
             row-key="id"
-            :scroll="{ x: 1100 }"
+            :scroll="{ x: 1200 }"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'status'">
-                <Tag :color="getStatusColor(record.status)">{{ getStatusLabel(record.status) }}</Tag>
+              <template v-if="column.key === 'layerCode'">
+                <Tag :color="layerTagColor(record.layerCode)">{{ record.layerCode || '—' }}</Tag>
               </template>
               <template v-else-if="column.key === 'triggerType'">
                 <Tag>{{ record.triggerType === 'SCHEDULE' ? '定时' : record.triggerType === 'MANUAL' ? '手动' : record.triggerType || '—' }}</Tag>
               </template>
+              <template v-else-if="column.key === 'status'">
+                <Tag :color="getStatusColor(record.status)">{{ getStatusLabel(record.status) }}</Tag>
+              </template>
               <template v-else-if="column.key === 'overallScore'">
-                <Tag :color="getScoreTagColor(record.overallScore)">
-                  {{ record.overallScore ?? '—' }}
-                </Tag>
+                <Tag :color="getScoreTagColor(record.overallScore)">{{ record.overallScore ?? '—' }}</Tag>
               </template>
               <template v-else-if="column.key === 'ruleResult'">
                 <Tooltip :title="`通过 ${record.passedCount || 0} 条 / 失败 ${record.failedCount || 0} 条`">
                   <div style="display: flex; align-items: center; gap: 8px">
-                    <Progress
-                      :percent="(record.totalRules || 0) > 0 ? Math.round(((record.passedCount || 0) / (record.totalRules || 1)) * 100) : 0"
-                      :stroke-color="getScoreColor((record.totalRules || 0) > 0 ? ((record.passedCount || 0) / (record.totalRules || 1)) * 100 : 0)"
-                      size="small" style="width: 80px"
-                    />
-                    <span style="font-size: 12px; color: #8c8c8c">
-                      {{ record.passedCount || 0 }}/{{ record.totalRules || 0 }}
-                    </span>
+                    <Progress :percent="(record.totalRules || 0) > 0 ? Math.round(((record.passedCount || 0) / (record.totalRules || 1)) * 100) : 0" :stroke-color="getScoreColor((record.totalRules || 0) > 0 ? ((record.passedCount || 0) / (record.totalRules || 1)) * 100 : 0)" size="small" style="width: 80px" />
+                    <span style="font-size: 12px; color: #8c8c8c">{{ record.passedCount || 0 }}/{{ record.totalRules || 0 }}</span>
                   </div>
                 </Tooltip>
               </template>
-              <template v-else-if="column.key === 'elapsed'">
-                {{ fmtElapsed(record.elapsedMs) }}
-              </template>
-              <template v-else-if="column.key === 'startTime'">
-                {{ record.startTime ? record.startTime.replace('T', ' ').slice(0, 16) : '—' }}
+              <template v-else-if="column.key === 'elapsed'">{{ fmtElapsed(record.elapsedMs) }}</template>
+              <template v-else-if="column.key === 'startTime'">{{ record.startTime ? record.startTime.replace('T', ' ').slice(0, 16) : '—' }}</template>
+              <template v-else-if="column.key === 'action'">
+                <Space>
+                  <Popconfirm v-if="['FAILED', 'SUCCESS', 'PARTIAL', 'STOPPED'].includes(record.status || '')" title="确认重新执行？" @confirm="handleRerun(record)">
+                    <Button type="link" size="small">重新执行</Button>
+                  </Popconfirm>
+                  <Popconfirm v-if="record.status === 'RUNNING'" title="确认停止执行？" @confirm="handleStop(record)">
+                    <Button type="link" size="small" danger><StopOutlined /></Button>
+                  </Popconfirm>
+                </Space>
               </template>
             </template>
           </Table>
@@ -922,88 +998,43 @@ onMounted(() => {
 
       <!-- ── DETAIL TAB ── -->
       <div v-show="activeTab === 'detail'">
-
         <!-- Filters -->
         <Card class="filter-card" :bordered="false">
           <Row :gutter="16" align="middle">
             <Col>
               <span class="filter-label">数仓层级：</span>
-              <Select
-                v-model:value="filterLayer"
-                style="width: 130px"
-                placeholder="全部"
-                allow-clear
-                :options="layerOptions"
-              />
+              <Select v-model:value="filterLayer" style="width: 130px" placeholder="全部" allow-clear :options="layerOptions" />
             </Col>
             <Col>
               <span class="filter-label">执行状态：</span>
-              <Select
-                v-model:value="filterStatus"
-                style="width: 130px"
-                placeholder="全部"
-                allow-clear
-                :options="executionStatusOptions"
-              />
+              <Select v-model:value="filterStatus" style="width: 130px" placeholder="全部" allow-clear :options="executionStatusOptions" />
             </Col>
             <Col>
               <Button @click="() => { filterLayer = ''; filterStatus = '' }">重置</Button>
             </Col>
             <Col style="margin-left: auto">
-              <span style="font-size: 13px; color: #8c8c8c">
-                共 {{ filteredExecutions.length }} 条执行记录
-              </span>
+              <span style="font-size: 13px; color: #8c8c8c">共 {{ filteredExecutions.length }} 条执行记录</span>
             </Col>
           </Row>
         </Card>
 
         <!-- Summary -->
         <Row :gutter="16" class="kpi-row">
-          <Col :span="4">
-            <Card class="kpi-stat-card" :bordered="false">
-              <Statistic title="平均评分" :value="execOverview.avgScore" suffix="分" :value-style="{ color: getScoreColor(execOverview.avgScore), fontSize: '28px' }"/>
-            </Card>
-          </Col>
-          <Col :span="4">
-            <Card class="kpi-stat-card" :bordered="false">
-              <Statistic title="平均通过率" :value="execOverview.avgPassRate" suffix="%" :value-style="{ color: getScoreColor(execOverview.avgPassRate), fontSize: '28px' }"/>
-            </Card>
-          </Col>
-          <Col :span="4">
-            <Card class="kpi-stat-card" :bordered="false">
-              <Statistic title="执行总数" :value="execOverview.total" :value-style="{ fontSize: '28px' }"/>
-            </Card>
-          </Col>
-          <Col :span="4">
-            <Card class="kpi-stat-card" :bordered="false">
-              <Statistic title="质检规则" :value="execOverview.totalRules" :value-style="{ fontSize: '28px' }"/>
-            </Card>
-          </Col>
-          <Col :span="4">
-            <Card class="kpi-stat-card" :bordered="false">
-              <Statistic title="成功数" :value="execOverview.success" :value-style="{ color: '#52c41a', fontSize: '28px' }"/>
-            </Card>
-          </Col>
-          <Col :span="4">
-            <Card class="kpi-stat-card" :bordered="false">
-              <Statistic title="失败数" :value="execOverview.failed" :value-style="{ color: execOverview.failed > 0 ? '#ff4d4f' : '#52c41a', fontSize: '28px' }"/>
-            </Card>
-          </Col>
+          <Col :span="4"><Card class="kpi-stat-card" :bordered="false"><Statistic title="平均评分" :value="execOverview.avgScore" suffix="分" :value-style="{ color: getScoreColor(execOverview.avgScore), fontSize: '28px' }"/></Card></Col>
+          <Col :span="4"><Card class="kpi-stat-card" :bordered="false"><Statistic title="平均通过率" :value="execOverview.avgPassRate" suffix="%" :value-style="{ color: getScoreColor(execOverview.avgPassRate), fontSize: '28px' }"/></Card></Col>
+          <Col :span="4"><Card class="kpi-stat-card" :bordered="false"><Statistic title="执行总数" :value="execOverview.total" :value-style="{ fontSize: '28px' }"/></Card></Col>
+          <Col :span="4"><Card class="kpi-stat-card" :bordered="false"><Statistic title="质检规则" :value="execOverview.totalRules" :value-style="{ fontSize: '28px' }"/></Card></Col>
+          <Col :span="4"><Card class="kpi-stat-card" :bordered="false"><Statistic title="成功数" :value="execOverview.success" :value-style="{ color: '#52c41a', fontSize: '28px' }"/></Card></Col>
+          <Col :span="4"><Card class="kpi-stat-card" :bordered="false"><Statistic title="失败数" :value="execOverview.failed" :value-style="{ color: execOverview.failed > 0 ? '#ff4d4f' : '#52c41a', fontSize: '28px' }"/></Card></Col>
         </Row>
 
         <!-- Layer breakdown -->
         <Row :gutter="16" class="chart-row" v-if="layerStats.length > 0">
           <Col :span="24">
             <Card class="chart-card" :bordered="false">
-              <template #title>
-                <span class="chart-title">各数仓层级质量详情</span>
-              </template>
+              <template #title><span class="chart-title">各数仓层级质量详情</span></template>
               <Descriptions :column="layerStats.length" size="small" bordered>
-                <DescriptionsItem
-                  v-for="ls in layerStats"
-                  :key="ls.layer"
-                  :label="ls.layer"
-                >
+                <DescriptionsItem v-for="ls in layerStats" :key="ls.layer" :label="ls.layer">
                   <div class="layer-desc">
                     <Tag :color="getScoreTagColor(ls.avgScore)">{{ ls.avgScore }}分</Tag>
                     <span style="font-size: 12px; color: #8c8c8c">通过率 {{ ls.passRate }}%</span>
@@ -1023,33 +1054,38 @@ onMounted(() => {
             :pagination="{ pageSize: 10, showSizeChanger: true, showTotal: (t: number) => `共 ${t} 条` }"
             size="small"
             row-key="id"
-            :scroll="{ x: 1100 }"
+            :scroll="{ x: 1200 }"
           >
             <template #bodyCell="{ column, record }">
-              <template v-if="column.key === 'status'">
-                <Tag :color="getStatusColor(record.status)">{{ getStatusLabel(record.status) }}</Tag>
+              <template v-if="column.key === 'layerCode'">
+                <Tag :color="layerTagColor(record.layerCode)">{{ record.layerCode || '—' }}</Tag>
               </template>
               <template v-else-if="column.key === 'triggerType'">
                 <Tag>{{ record.triggerType === 'SCHEDULE' ? '定时' : record.triggerType === 'MANUAL' ? '手动' : record.triggerType || '—' }}</Tag>
+              </template>
+              <template v-else-if="column.key === 'status'">
+                <Tag :color="getStatusColor(record.status)">{{ getStatusLabel(record.status) }}</Tag>
               </template>
               <template v-else-if="column.key === 'overallScore'">
                 <Tag :color="getScoreTagColor(record.overallScore)">{{ record.overallScore ?? '—' }}</Tag>
               </template>
               <template v-else-if="column.key === 'ruleResult'">
                 <div style="display: flex; align-items: center; gap: 8px">
-                  <Progress
-                    :percent="(record.totalRules || 0) > 0 ? Math.round(((record.passedCount || 0) / (record.totalRules || 1)) * 100) : 0"
-                    :stroke-color="getScoreColor((record.totalRules || 0) > 0 ? ((record.passedCount || 0) / (record.totalRules || 1)) * 100 : 0)"
-                    size="small" style="width: 80px"
-                  />
+                  <Progress :percent="(record.totalRules || 0) > 0 ? Math.round(((record.passedCount || 0) / (record.totalRules || 1)) * 100) : 0" :stroke-color="getScoreColor((record.totalRules || 0) > 0 ? ((record.passedCount || 0) / (record.totalRules || 1)) * 100 : 0)" size="small" style="width: 80px" />
                   <span style="font-size: 12px; color: #8c8c8c">{{ record.passedCount || 0 }}/{{ record.totalRules || 0 }}</span>
                 </div>
               </template>
-              <template v-else-if="column.key === 'elapsed'">
-                {{ fmtElapsed(record.elapsedMs) }}
-              </template>
-              <template v-else-if="column.key === 'startTime'">
-                {{ record.startTime ? record.startTime.replace('T', ' ').slice(0, 16) : '—' }}
+              <template v-else-if="column.key === 'elapsed'">{{ fmtElapsed(record.elapsedMs) }}</template>
+              <template v-else-if="column.key === 'startTime'">{{ record.startTime ? record.startTime.replace('T', ' ').slice(0, 16) : '—' }}</template>
+              <template v-else-if="column.key === 'action'">
+                <Space>
+                  <Popconfirm v-if="['FAILED', 'SUCCESS', 'PARTIAL', 'STOPPED'].includes(record.status || '')" title="确认重新执行？" @confirm="handleRerun(record)">
+                    <Button type="link" size="small">重新执行</Button>
+                  </Popconfirm>
+                  <Popconfirm v-if="record.status === 'RUNNING'" title="确认停止执行？" @confirm="handleStop(record)">
+                    <Button type="link" size="small" danger><StopOutlined /></Button>
+                  </Popconfirm>
+                </Space>
               </template>
             </template>
           </Table>
@@ -1061,7 +1097,7 @@ onMounted(() => {
 </template>
 
 <style scoped>
-/* ── Header ───────────────────────────────────────── */
+/* ── Header ─────────────────────────────────────────────────────── */
 .dq-header {
   display: flex;
   align-items: center;
@@ -1072,93 +1108,33 @@ onMounted(() => {
   margin-bottom: 0;
   box-shadow: 0 4px 20px rgba(13, 27, 75, 0.35);
 }
+.dq-header-left { display: flex; align-items: center; gap: 12px; }
+.dq-icon { flex-shrink: 0; }
+.dq-title { font-size: 18px; font-weight: 700; color: #fff; letter-spacing: 1px; }
+.dq-subtitle { font-size: 12px; color: rgba(255, 255, 255, 0.55); margin-top: 2px; display: flex; align-items: center; gap: 4px; }
+.dot-sep { color: rgba(255, 255, 255, 0.3); }
+.dq-header-right { display: flex; align-items: center; gap: 8px; }
 
-.dq-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
+/* ── Tabs ──────────────────────────────────────────────────────── */
+.dq-tabs { background: #fff; border-bottom: 1px solid #f0f0f0; margin-bottom: 16px; }
+.tab-label { display: flex; align-items: center; font-size: 14px; font-weight: 500; }
 
-.dq-icon {
-  flex-shrink: 0;
-}
-
-.dq-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #fff;
-  letter-spacing: 1px;
-}
-
-.dq-subtitle {
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.55);
-  margin-top: 2px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-}
-
-.dot-sep {
-  color: rgba(255, 255, 255, 0.3);
-}
-
-.dq-header-right {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-/* ── Tabs ─────────────────────────────────────────── */
-.dq-tabs {
-  background: #fff;
-  border-bottom: 1px solid #f0f0f0;
-  margin-bottom: 16px;
-}
-
-.tab-label {
-  display: flex;
-  align-items: center;
-  font-size: 14px;
-  font-weight: 500;
-}
-
-/* ── KPI ──────────────────────────────────────────── */
-.kpi-row {
-  margin-bottom: 12px;
-}
+/* ── KPI ──────────────────────────────────────────────────────── */
+.kpi-row { margin-bottom: 12px; }
 
 .kpi-main-card {
   border-radius: 14px;
   border: 1px solid #dde3f5;
   background: linear-gradient(160deg, #f0f4ff 0%, #e8eef8 100%);
   text-align: center;
-  padding: 4px 8px 12px;
-  min-height: 180px;
+  padding: 4px 8px 14px;
+  min-height: 220px;
 }
-
-.kpi-gauge-wrap {
-  display: flex;
-  justify-content: center;
-}
-
-.kpi-gauge-label {
-  font-size: 14px;
-  font-weight: 700;
-  margin-top: -8px;
-}
-
-.kpi-gauge-title {
-  font-size: 13px;
-  color: #555;
-  margin-top: 2px;
-}
-
-.kpi-gauge-source {
-  font-size: 11px;
-  color: #aaa;
-  margin-top: 4px;
-}
+.kpi-gauge-wrap { display: flex; justify-content: center; }
+.kpi-gauge-label { font-size: 14px; font-weight: 700; margin-top: -8px; }
+.kpi-gauge-title { font-size: 13px; color: #555; margin-top: 2px; }
+.kpi-gauge-meta { font-size: 12px; color: #8c8c8c; margin-top: 4px; }
+.kpi-gauge-meta strong { font-weight: 700; }
 
 .kpi-stat-card {
   border-radius: 12px;
@@ -1166,17 +1142,7 @@ onMounted(() => {
   padding: 8px 12px;
   min-height: 140px;
 }
-
-.stat-icon-wrap {
-  width: 36px;
-  height: 36px;
-  border-radius: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  margin-bottom: 6px;
-}
-
+.stat-icon-wrap { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; margin-bottom: 6px; }
 .stat-icon--green { background: linear-gradient(135deg, #52c41a, #73d13d); }
 .stat-icon--blue { background: linear-gradient(135deg, #5470c6, #91cc75); }
 .stat-icon--orange { background: linear-gradient(135deg, #fa8c16, #faad14); }
@@ -1184,170 +1150,68 @@ onMounted(() => {
 .stat-icon--red { background: linear-gradient(135deg, #ff4d4f, #ff7875); }
 .stat-icon--gray { background: linear-gradient(135deg, #d9d9d9, #e8e8e8); }
 .stat-icon--teal { background: linear-gradient(135deg, #13c2c2, #36cfc9); }
+.stat-sub-text { font-size: 11px; margin-top: 4px; }
 
-.kpi-alert-active {
-  border-color: #ffccc7 !important;
-  background: #fffaf5 !important;
-}
-
-.stat-sub-text {
-  font-size: 11px;
-  margin-top: 4px;
-}
-
-/* ── Exec status chips ────────────────────────────── */
-.exec-status-row {
-  margin-bottom: 12px;
-}
-
-.exec-status-chip {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 20px;
-  font-size: 13px;
-  font-weight: 500;
-}
-
+/* ── Exec status chips ────────────────────────────────────────── */
+.exec-status-row { margin-bottom: 12px; }
+.exec-status-chip { display: flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 20px; font-size: 13px; font-weight: 500; }
 .exec-chip--success { background: #f6ffed; color: #52c41a; border: 1px solid #b7eb8f; }
 .exec-chip--partial { background: #fffbe6; color: #fa8c16; border: 1px solid #ffe58f; }
 .exec-chip--failed { background: #fff2f0; color: #ff4d4f; border: 1px solid #ffccc7; }
 .exec-chip--running { background: #f0f5ff; color: #1890ff; border: 1px solid #adc6ff; }
 
-/* ── Charts ────────────────────────────────────────── */
-.chart-row {
-  margin-bottom: 12px;
-}
+/* ── Charts ───────────────────────────────────────────────────── */
+.chart-row { margin-bottom: 12px; }
+.chart-card { border-radius: 12px; border: 1px solid #f0f0f0; }
+.chart-title { font-size: 14px; font-weight: 600; color: #1a1a1a; display: flex; align-items: center; }
 
-.chart-card {
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
-}
-
-.chart-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1a1a1a;
-  display: flex;
-  align-items: center;
-}
-
-/* ── Dimension grid ────────────────────────────────── */
-.dim-grid {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 12px;
-}
-
+/* ── Six dim grid (质量评分样式) ──────────────────────────────── */
+.dim-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .dim-item {
-  padding: 8px 4px;
-  border-radius: 8px;
-  background: #fafafa;
-  text-align: center;
-}
-
-.dim-label {
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-.dim-value {
-  font-size: 22px;
-  font-weight: 800;
-  line-height: 1.2;
-}
-
-/* ── Timeline ──────────────────────────────────────── */
-.timeline-item {
-  padding-bottom: 4px;
-}
-
-.timeline-top {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  margin-bottom: 2px;
-}
-
-.timeline-plan {
-  font-size: 13px;
-  font-weight: 500;
-  color: #333;
-}
-
-.timeline-layer {
-  font-size: 11px;
-  color: #8c8c8c;
-  background: #f5f5f5;
-  padding: 1px 6px;
   border-radius: 10px;
-}
-
-.timeline-bottom {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  font-size: 12px;
-  color: #8c8c8c;
-}
-
-.timeline-score {
-  font-weight: 600;
-}
-
-/* ── Exec stats empty state ───────────────────────── */
-.exec-stats-empty {
-  padding: 8px 0;
-}
-
-.exec-stat-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 8px 0;
-  border-bottom: 1px solid #f5f5f5;
-}
-
-.exec-stat-row:last-child {
-  border-bottom: none;
-}
-
-.exec-stat-label {
-  font-size: 13px;
-  color: #8c8c8c;
-}
-
-.exec-stat-val {
-  font-size: 15px;
-  font-weight: 600;
-  color: #333;
-}
-
-/* ── Filter ───────────────────────────────────────── */
-.filter-card {
-  border-radius: 10px;
+  background: #fff;
   border: 1px solid #f0f0f0;
-  margin-bottom: 12px;
+  padding: 12px 14px;
+  position: relative;
+  overflow: hidden;
+  min-height: 96px;
+  transition: box-shadow 0.2s;
 }
+.dim-item:hover { box-shadow: 0 4px 12px rgba(0,0,0,0.08); }
+.dim-item::after { content: ''; position: absolute; left: 0; right: 0; bottom: 0; height: 3px; border-radius: 0 0 10px 10px; }
+.dim-accent--blue::after { background: linear-gradient(90deg, #1890ff, #69c0ff); }
+.dim-accent--green::after { background: linear-gradient(90deg, #52c41a, #95de64); }
+.dim-accent--orange::after { background: linear-gradient(90deg, #fa8c16, #ffc069); }
+.dim-accent--purple::after { background: linear-gradient(90deg, #722ed1, #b37feb); }
+.dim-accent--teal::after { background: linear-gradient(90deg, #13c2c2, #5cdbd3); }
+.dim-accent--red::after { background: linear-gradient(90deg, #ff4d4f, #ff7875); }
+.dim-item-icon { color: #bfbfbf; margin-bottom: 4px; }
+.dim-svg { width: 22px; height: 22px; }
+.dim-label { font-size: 12px; color: #8c8c8c; }
+.dim-value { font-size: 24px; font-weight: 800; font-variant-numeric: tabular-nums; line-height: 1.2; margin-top: 2px; }
 
-.filter-label {
-  font-size: 13px;
-  color: #555;
-  margin-right: 4px;
-}
+/* ── Timeline ─────────────────────────────────────────────────── */
+.timeline-item { padding-bottom: 4px; }
+.timeline-top { display: flex; align-items: center; gap: 6px; margin-bottom: 2px; }
+.timeline-plan { font-size: 13px; font-weight: 500; color: #333; }
+.timeline-layer { font-size: 11px; color: #8c8c8c; background: #f5f5f5; padding: 1px 6px; border-radius: 10px; }
+.timeline-bottom { display: flex; align-items: center; gap: 12px; font-size: 12px; color: #8c8c8c; }
+.timeline-score { font-weight: 600; }
 
-/* ── Table ─────────────────────────────────────────── */
-.table-card {
-  border-radius: 12px;
-  border: 1px solid #f0f0f0;
-}
+/* ── Exec stats empty ─────────────────────────────────────────── */
+.exec-stats-empty { padding: 8px 0; }
+.exec-stat-row { display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f5f5f5; }
+.exec-stat-row:last-child { border-bottom: none; }
+.exec-stat-label { font-size: 13px; color: #8c8c8c; }
+.exec-stat-val { font-size: 15px; font-weight: 600; color: #333; }
 
-/* ── Layer description ─────────────────────────────── */
-.layer-desc {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: 4px;
-}
+/* ── Filter ───────────────────────────────────────────────────── */
+.filter-card { border-radius: 10px; border: 1px solid #f0f0f0; margin-bottom: 12px; }
+.filter-label { font-size: 13px; color: #555; margin-right: 4px; }
+
+/* ── Table ────────────────────────────────────────────────────── */
+.table-card { border-radius: 12px; border: 1px solid #f0f0f0; }
+
+/* ── Layer description ────────────────────────────────────────── */
+.layer-desc { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; }
 </style>

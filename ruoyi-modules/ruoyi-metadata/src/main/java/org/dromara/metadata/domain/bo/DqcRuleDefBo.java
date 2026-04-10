@@ -15,6 +15,12 @@ import java.math.BigDecimal;
 
 /**
  * 数据质量规则定义业务对象
+ * <p>
+ * 采用纯元数据驱动设计：
+ * - 目标表/字段：通过 tableId、columnId 选择
+ * - 对比表/字段：通过 compareTableId、compareColumnId 选择
+ * <p>
+ * 数据源信息通过元数据间接获取，无需手动填写
  */
 @Data
 @NoArgsConstructor
@@ -45,9 +51,29 @@ public class DqcRuleDefBo extends BaseEntity implements Serializable {
     private String ruleCode;
 
     /**
-     * 模板ID
+     * 模板ID (dqc_rule_template.id)
      */
     private Long templateId;
+
+    /**
+     * 目标表元数据ID (metadata_table.id)
+     */
+    private Long tableId;
+
+    /**
+     * 目标字段元数据ID (metadata_column.id)
+     */
+    private Long columnId;
+
+    /**
+     * 对比表元数据ID (metadata_table.id)
+     */
+    private Long compareTableId;
+
+    /**
+     * 对比字段元数据ID (metadata_column.id)
+     */
+    private Long compareColumnId;
 
     /**
      * 规则类型
@@ -70,36 +96,6 @@ public class DqcRuleDefBo extends BaseEntity implements Serializable {
     private String ruleExpr;
 
     /**
-     * 目标数据源ID
-     */
-    private Long targetDsId;
-
-    /**
-     * 目标表名
-     */
-    private String targetTable;
-
-    /**
-     * 目标列名
-     */
-    private String targetColumn;
-
-    /**
-     * 对比数据源ID
-     */
-    private Long compareDsId;
-
-    /**
-     * 对比表名
-     */
-    private String compareTable;
-
-    /**
-     * 对比列名
-     */
-    private String compareColumn;
-
-    /**
      * 阈值最小值
      */
     private BigDecimal thresholdMin;
@@ -120,12 +116,12 @@ public class DqcRuleDefBo extends BaseEntity implements Serializable {
     private String regexPattern;
 
     /**
-     * 错误级别：LOW/MEDIUM/HIGH/CRITICAL
+     * 错误级别：LOW / MEDIUM / HIGH / CRITICAL
      */
     private String errorLevel;
 
     /**
-     * 规则强度：STRONG-强规则 / WEAK-弱规则
+     * 规则强度：STRONG / WEAK
      */
     private String ruleStrength;
 

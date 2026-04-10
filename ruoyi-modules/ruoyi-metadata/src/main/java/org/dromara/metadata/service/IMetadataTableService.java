@@ -77,4 +77,15 @@ public interface IMetadataTableService {
      * 更新状态
      */
     int updateStatus(Long id, String status);
+
+    /**
+     * 批量更新分层/域/标签（扫描完成引导配置）
+     */
+    int batchUpdate(MetadataTableBo bo);
+
+    /**
+     * 统计未完成分层的表数量（用于治理提示）
+     * @return [未配置分层数, 未配置数据域数, 未配置敏感等级数]
+     */
+    long[] countIncompleteTables();
 }

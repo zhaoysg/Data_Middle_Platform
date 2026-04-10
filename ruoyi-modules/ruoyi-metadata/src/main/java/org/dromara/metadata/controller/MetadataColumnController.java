@@ -60,6 +60,17 @@ public class MetadataColumnController extends BaseController {
         return toAjax(columnService.updateAlias(id, alias));
     }
 
+    /**
+     * 修改字段（支持别名、注释、敏感等级）
+     */
+    @SaCheckPermission("metadata:column:edit")
+    @Log(title = "元数据字段", businessType = BusinessType.UPDATE)
+    @PutMapping("/{id}/info")
+    public R<Void> updateInfo(@PathVariable Long id, @RequestBody MetadataColumnBo bo) {
+        bo.setId(id);
+        return toAjax(columnService.updateColumn(bo));
+    }
+
     /** 删除字段 */
     @SaCheckPermission("metadata:column:remove")
     @Log(title = "元数据字段", businessType = BusinessType.DELETE)

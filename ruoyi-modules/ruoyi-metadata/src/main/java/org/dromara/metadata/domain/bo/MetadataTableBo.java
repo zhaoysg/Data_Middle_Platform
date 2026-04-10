@@ -9,6 +9,8 @@ import lombok.NoArgsConstructor;
 import org.dromara.common.mybatis.core.domain.BaseEntity;
 import org.dromara.metadata.domain.MetadataTable;
 
+import java.util.List;
+
 /**
  * 元数据表业务对象
  */
@@ -45,6 +47,9 @@ public class MetadataTableBo extends BaseEntity {
 
     /** 关键字搜索 */
     private String keyword;
+
+    /** 批量更新时的ID列表 */
+    private List<Long> ids;
 
     public MetadataTableBo(Long id) {
         this.id = id;

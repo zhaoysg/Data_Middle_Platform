@@ -5,8 +5,10 @@ import org.dromara.datasource.adapter.DataSourceAdapter;
 import org.dromara.metadata.domain.DqcExecutionDetail;
 import org.dromara.metadata.domain.DqcRuleDef;
 
+import java.sql.SQLException;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Supplier;
 
 /**
  * 唯一性检查执行器
@@ -14,6 +16,8 @@ import java.util.Map;
  * 规则类型: UNIQUE
  * <p>
  * 检查目标列的重复值数量或重复率。
+ * <p>
+ * 元数据驱动：使用 MetadataContext 获取表名、字段名
  */
 @Slf4j
 public class UniqueCheckExecutor extends AbstractRuleExecutor {
@@ -27,10 +31,22 @@ public class UniqueCheckExecutor extends AbstractRuleExecutor {
 
     @Override
     public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), () -> false);
+    }
+
+    @Override
+    public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                        Supplier<Boolean> cancelChecker) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), cancelChecker);
+    }
+
+    @Override
+    public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                        MetadataContext context, Supplier<Boolean> cancelChecker) {
         long start = System.currentTimeMillis();
 
-        // 渲染SQL
-        String sql = renderSql(rule, adapter);
+        // 渲染SQL（使用元数据上下文）
+        String sql = renderSql(rule, adapter, context);
         detail.setExecuteSql(sql);
 
         try {

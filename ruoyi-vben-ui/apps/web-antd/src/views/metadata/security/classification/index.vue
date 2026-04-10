@@ -44,6 +44,9 @@ const gridOptions: VxeGridProps = {
       field: 'className',
       width: 220,
       fixed: 'left',
+      align: 'left',
+      // 全局 grid.showOverflow=true 会按单行处理单元格，与双行插槽叠加易导致行高异常
+      showOverflow: false,
       slots: { default: 'classNameCell' },
     },
     { title: '分类编码', field: 'classCode', width: 150 },
@@ -59,6 +62,7 @@ const gridOptions: VxeGridProps = {
       title: '关联等级',
       field: 'defaultLevelName',
       width: 120,
+      showOverflow: false,
       slots: { default: 'assocLevel' },
     },
     {
@@ -75,9 +79,22 @@ const gridOptions: VxeGridProps = {
       align: 'center',
       slots: { default: 'fieldCountCell' },
     },
-    { title: '状态', field: 'enabled', width: 80, slots: { default: 'enabled' } },
+    {
+      title: '状态',
+      field: 'enabled',
+      width: 80,
+      showOverflow: false,
+      slots: { default: 'enabled' },
+    },
     { title: '创建时间', field: 'createTime', width: 170 },
-    { title: '操作', field: 'action', width: 130, fixed: 'right', slots: { default: 'action' } },
+    {
+      title: '操作',
+      field: 'action',
+      width: 130,
+      fixed: 'right',
+      showOverflow: false,
+      slots: { default: 'action' },
+    },
   ],
   // 与敏感等级页一致：auto 高度由内容撑开，避免与自定义页头/统计区叠加 fixed 高度导致行被压扁
   height: 'auto',
@@ -204,7 +221,8 @@ function fmt(n: number | undefined) {
     </div>
 
     <!-- 表格区：与敏感等级页相同，直接 BasicTable，不做 flex 定高包裹 -->
-    <BasicTable table-title="数据分类">
+    <!-- 与页头/统计并存时禁止 h-full：否则表格外壳占满整页内容区，VXE+height:auto 内部行高会算崩、内容堆叠 -->
+    <BasicTable class="!h-auto w-full" table-title="数据分类">
         <template #toolbar-tools>
           <Space>
             <a-button type="primary" @click="handleAdd">
@@ -313,6 +331,18 @@ function fmt(n: number | undefined) {
 /* ---- 页面容器（仅布局装饰，不参与定高挤压表格） ---- */
 .clsf-page {
   padding-bottom: 8px;
+}
+
+/* 兜底：保证表体行有足够行高（避免极端布局下单元格纵向压扁） */
+.clsf-page :deep(.vxe-body--row .vxe-cell) {
+  min-height: 48px;
+  padding-top: 10px;
+  padding-bottom: 10px;
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+.clsf-page :deep(.vxe-body--row) {
+  min-height: 48px;
 }
 
 /* ---- 页面标题区 ---- */

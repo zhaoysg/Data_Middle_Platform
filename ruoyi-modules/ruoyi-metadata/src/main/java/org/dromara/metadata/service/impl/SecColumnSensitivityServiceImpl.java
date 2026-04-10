@@ -35,6 +35,7 @@ import java.time.LocalDateTime;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 
 /**
  * 字段敏感记录服务实现
@@ -116,13 +117,8 @@ public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivitySer
         List<SecSensitivityRule> enabledRules = ruleMapper.selectList(
             Wrappers.<SecSensitivityRule>lambdaQuery()
                 .eq(SecSensitivityRule::getEnabled, "1")
+                .orderByDesc(SecSensitivityRule::getId)
         );
-        // 按优先级从高到低排序
-        enabledRules.sort((a, b) -> {
-            int pA = a.getPriority() != null ? a.getPriority() : 0;
-            int pB = b.getPriority() != null ? b.getPriority() : 0;
-            return Integer.compare(pB, pA);
-        });
 
         if (CollUtil.isEmpty(enabledRules)) {
             log.warn("没有启用的敏感识别规则");
@@ -171,7 +167,6 @@ public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivitySer
                         entity.setClassCode(bestMatch.getTargetClassCode());
                         entity.setIdentifiedBy("AUTO");
                         entity.setConfirmed("0");
-                        entity.setScanBatchNo(batchNo);
 
                         // 幂等：已存在的记录更新，新记录插入
                         SecColumnSensitivity existing = baseMapper.selectOne(Wrappers.<SecColumnSensitivity>lambdaQuery()
@@ -181,11 +176,10 @@ public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivitySer
 
                         if (existing != null) {
                             entity.setId(existing.getId());
-                            entity.setUpdateTime(LocalDateTime.now());
+                            entity.setUpdateTime(new Date());
                             baseMapper.updateById(entity);
                             updateCount++;
                         } else {
-                            entity.setScanTime(LocalDateTime.now());
                             baseMapper.insert(entity);
                             newCount++;
                         }

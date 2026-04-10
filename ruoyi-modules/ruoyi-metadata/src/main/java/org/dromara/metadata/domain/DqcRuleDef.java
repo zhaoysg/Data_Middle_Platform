@@ -12,6 +12,13 @@ import java.math.BigDecimal;
 
 /**
  * 数据质量规则定义实体
+ * <p>
+ * 采用纯元数据驱动设计：
+ * - 目标表/字段：通过 tableId、columnId 关联 metadata_table、metadata_column
+ * - 对比表/字段：通过 compareTableId、compareColumnId 关联
+ * - 数据源信息：通过元数据表间接获取（tableId → metadata_table.ds_id）
+ * <p>
+ * 执行时通过 ID 动态查询元数据获取真实表名、字段名、数据源信息
  */
 @Data
 @NoArgsConstructor
@@ -36,9 +43,32 @@ public class DqcRuleDef extends TenantEntity implements Serializable {
     private String ruleCode;
 
     /**
-     * 模板ID
+     * 模板ID (dqc_rule_template.id)
      */
     private Long templateId;
+
+    /**
+     * 目标表元数据ID (metadata_table.id)
+     */
+    private Long tableId;
+
+    /**
+     * 目标字段元数据ID (metadata_column.id)
+     * 字段级规则必填，表级规则可为空
+     */
+    private Long columnId;
+
+    /**
+     * 对比表元数据ID (metadata_table.id)
+     * 跨表/跨字段规则需要填写
+     */
+    private Long compareTableId;
+
+    /**
+     * 对比字段元数据ID (metadata_column.id)
+     * 跨字段规则需要填写
+     */
+    private Long compareColumnId;
 
     /**
      * 规则类型
@@ -46,7 +76,7 @@ public class DqcRuleDef extends TenantEntity implements Serializable {
     private String ruleType;
 
     /**
-     * 应用层级
+     * 应用层级：TABLE / COLUMN / CROSS_FIELD / CROSS_TABLE
      */
     private String applyLevel;
 
@@ -56,39 +86,9 @@ public class DqcRuleDef extends TenantEntity implements Serializable {
     private String dimensions;
 
     /**
-     * 规则表达式/SQL
+     * 规则表达式/SQL（模板规则可为空）
      */
     private String ruleExpr;
-
-    /**
-     * 目标数据源ID
-     */
-    private Long targetDsId;
-
-    /**
-     * 目标表名
-     */
-    private String targetTable;
-
-    /**
-     * 目标列名
-     */
-    private String targetColumn;
-
-    /**
-     * 对比数据源ID
-     */
-    private Long compareDsId;
-
-    /**
-     * 对比表名
-     */
-    private String compareTable;
-
-    /**
-     * 对比列名
-     */
-    private String compareColumn;
 
     /**
      * 阈值最小值
@@ -111,12 +111,12 @@ public class DqcRuleDef extends TenantEntity implements Serializable {
     private String regexPattern;
 
     /**
-     * 错误级别：LOW/MEDIUM/HIGH/CRITICAL
+     * 错误级别：LOW / MEDIUM / HIGH / CRITICAL
      */
     private String errorLevel;
 
     /**
-     * 规则强度：STRONG-强规则 / WEAK-弱规则
+     * 规则强度：STRONG / WEAK
      */
     private String ruleStrength;
 
@@ -131,7 +131,7 @@ public class DqcRuleDef extends TenantEntity implements Serializable {
     private Integer sortOrder;
 
     /**
-     * 是否启用
+     * 是否启用：0-否，1-是
      */
     private String enabled;
 

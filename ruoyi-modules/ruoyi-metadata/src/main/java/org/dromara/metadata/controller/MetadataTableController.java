@@ -4,7 +4,9 @@ import cn.dev33.satoken.annotation.SaCheckPermission;
 import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.constraints.NotEmpty;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.domain.R;
+import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.excel.utils.ExcelUtil;
 import org.dromara.common.log.annotation.Log;
 import org.dromara.common.log.enums.BusinessType;
@@ -26,6 +28,7 @@ import java.util.List;
  */
 @Validated
 @RequiredArgsConstructor
+@Slf4j
 @RestController
 @RequestMapping("/system/metadata/table")
 public class MetadataTableController extends BaseController {
@@ -46,7 +49,22 @@ public class MetadataTableController extends BaseController {
     @PostMapping("/export")
     public void export(MetadataTableBo bo, HttpServletResponse response) {
         List<MetadataTableVo> list = tableService.listTable(bo);
+        // 治理提示：检查导出数据中是否有未配置域/分层的表
+        long noLayer = list.stream().filter(t -> StringUtils.isBlank(t.getDataLayer())).count();
+        long noDomain = list.stream().filter(t -> StringUtils.isBlank(t.getDataDomain())).count();
+        if (noLayer > 0 || noDomain > 0) {
+            log.warn("导出元数据表治理提醒：{}张表未配置分层，{}张表未配置数据域", noLayer, noDomain);
+        }
         ExcelUtil.exportExcel(list, "元数据表数据", MetadataTableVo.class, response);
+    }
+
+    /**
+     * 查询治理统计（未配置分层/域/敏感等级的表数量）
+     */
+    @SaCheckPermission("metadata:table:query")
+    @GetMapping("/governance-stat")
+    public R<long[]> governanceStat() {
+        return R.ok(tableService.countIncompleteTables());
     }
 
     /** 获取元数据表详细信息 */
@@ -104,5 +122,19 @@ public class MetadataTableController extends BaseController {
     public void exportColumns(@RequestParam Long tableId, HttpServletResponse response) {
         List<MetadataColumnVo> list = columnService.listByTableId(tableId);
         ExcelUtil.exportExcel(list, "字段列表", MetadataColumnVo.class, response);
+    }
+
+    /**
+     * 批量更新元数据表（分层/域/敏感等级/标签）
+     * 用于扫描完成后的引导配置
+     */
+    @SaCheckPermission("metadata:table:edit")
+    @Log(title = "元数据表", businessType = BusinessType.UPDATE)
+    @PutMapping("/batch-update")
+    public R<Integer> batchUpdate(@RequestBody MetadataTableBo bo) {
+        if (bo.getIds() == null || bo.getIds().isEmpty()) {
+            return R.fail("请选择要更新的表");
+        }
+        return R.ok(tableService.batchUpdate(bo));
     }
 }

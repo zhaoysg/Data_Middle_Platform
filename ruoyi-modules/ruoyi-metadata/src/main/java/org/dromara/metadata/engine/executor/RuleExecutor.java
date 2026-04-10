@@ -7,35 +7,50 @@ import org.dromara.metadata.domain.DqcRuleDef;
 import java.util.function.Supplier;
 
 /**
- * 数据质量规则执行器接口
+ * Rule executor interface for DQC.
  */
 public interface RuleExecutor {
 
     /**
-     * 获取执行器类型
+     * Get executor type
      *
-     * @return 规则类型编码
+     * @return rule type code
      */
     String getType();
 
     /**
-     * 执行规则检查
+     * Execute rule check (legacy compatibility)
      *
-     * @param rule 规则定义
-     * @param detail 执行明细（用于存储结果）
-     * @param adapter 数据源适配器
+     * @param rule    rule definition
+     * @param detail  execution detail
+     * @param adapter datasource adapter
      */
-    void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter);
+    default void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), () -> false);
+    }
 
     /**
-     * 执行规则检查（支持取消）
-     * @param rule 规则定义
-     * @param detail 执行明细
-     * @param adapter 数据源适配器
-     * @param cancelChecker 取消检查器，返回true表示应中断执行
+     * Execute rule check with cancel support
+     *
+     * @param rule          rule definition
+     * @param detail        execution detail
+     * @param adapter       datasource adapter
+     * @param cancelChecker cancel checker
      */
     default void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
                          Supplier<Boolean> cancelChecker) {
-        execute(rule, detail, adapter);
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), cancelChecker);
     }
+
+    /**
+     * Execute rule check (metadata-driven)
+     *
+     * @param rule          rule definition
+     * @param detail        execution detail
+     * @param adapter       datasource adapter
+     * @param context       metadata context
+     * @param cancelChecker cancel checker
+     */
+    void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                 MetadataContext context, Supplier<Boolean> cancelChecker);
 }

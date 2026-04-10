@@ -16,6 +16,8 @@ import java.util.function.Supplier;
  * 规则类型: CUSTOM_SQL
  * <p>
  * 执行用户自定义的SQL语句进行数据质量检查。
+ * <p>
+ * 元数据驱动：使用 MetadataContext 获取表名、字段名
  */
 @Slf4j
 public class CustomSqlExecutor extends AbstractRuleExecutor {
@@ -29,56 +31,22 @@ public class CustomSqlExecutor extends AbstractRuleExecutor {
 
     @Override
     public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter) {
-        long start = System.currentTimeMillis();
-
-        // 渲染SQL（自定义SQL直接执行）
-        String sql = renderSql(rule, adapter);
-        CustomSqlSecuritySupport.validateRuleExpr(sql);
-        detail.setExecuteSql(CustomSqlSecuritySupport.REDACTED_SQL);
-
-        try {
-            // 执行查询
-            List<Map<String, Object>> resultSet = adapter.executeQuery(sql);
-            Object result = extractResultValue(resultSet);
-
-            if (!CustomSqlSecuritySupport.isAllowedResultType(result)) {
-                throw new IllegalArgumentException(CustomSqlSecuritySupport.RESULT_TYPE_ERROR);
-            }
-
-            detail.setActualValue(null);
-            detail.setElapsedMs(System.currentTimeMillis() - start);
-
-            // 评估结果
-            var evaluation = evaluateResult(result, rule);
-            detail.setPassFlag(evaluation.pass() ? "1" : "0");
-            detail.setResultValue(evaluation.resultValue());
-            detail.setThresholdValue(evaluation.thresholdValue() != null ? evaluation.thresholdValue().toPlainString() : null);
-
-            if (!evaluation.pass()) {
-                detail.setErrorLevel(rule.getErrorLevel());
-                detail.setErrorMsg(evaluation.message());
-            }
-
-        } catch (IllegalArgumentException e) {
-            log.warn("CUSTOM_SQL校验失败: ruleId={}, error={}", rule.getId(), e.getMessage());
-            detail.setElapsedMs(System.currentTimeMillis() - start);
-            detail.setPassFlag("0");
-            detail.setErrorLevel(rule.getErrorLevel());
-            detail.setErrorMsg(e.getMessage());
-        } catch (Exception e) {
-            log.error("CUSTOM_SQL执行失败: ruleId={}, error={}", rule.getId(), e.getMessage());
-            detail.setElapsedMs(System.currentTimeMillis() - start);
-            detail.setPassFlag("0");
-            detail.setErrorLevel(rule.getErrorLevel());
-            detail.setErrorMsg(CustomSqlSecuritySupport.EXECUTION_ERROR);
-        }
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), () -> false);
     }
 
     @Override
     public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
                         Supplier<Boolean> cancelChecker) {
+        execute(rule, detail, adapter, MetadataContext.of(null, null, null, null), cancelChecker);
+    }
+
+    @Override
+    public void execute(DqcRuleDef rule, DqcExecutionDetail detail, DataSourceAdapter adapter,
+                        MetadataContext context, Supplier<Boolean> cancelChecker) {
         long start = System.currentTimeMillis();
-        String sql = renderSql(rule, adapter);
+
+        // 渲染SQL（使用元数据上下文）
+        String sql = renderSql(rule, adapter, context);
         CustomSqlSecuritySupport.validateRuleExpr(sql);
         detail.setExecuteSql(CustomSqlSecuritySupport.REDACTED_SQL);
 

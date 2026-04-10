@@ -187,6 +187,16 @@ export interface DqcRuleDef {
   ruleDesc?: string;
   templateId?: number;
   templateName?: string;
+  /** 关联元数据表ID (metadata_table.id) */
+  tableId?: number;
+  /** 关联元数据字段ID (metadata_column.id) */
+  columnId?: number;
+  /** 元数据表名称（用于展示） */
+  tableName?: string;
+  /** 元数据字段名称（用于展示） */
+  columnName?: string;
+  /** 数据源ID（从元数据获取） */
+  dsId?: number;
   ruleType?: string;
   /** 质量维度，多个英文逗号分隔 */
   dimensions?: string;

@@ -42,6 +42,16 @@ export function metadataTableRemove(ids: IDS) {
   return requestClient.deleteWithMsg<void>(`${Api.tableRoot}/${ids}`);
 }
 
+/** 批量更新元数据表（分层/域/敏感等级/标签） */
+export function metadataTableBatchUpdate(data: { ids: number[]; dataLayer?: string; dataDomain?: string; sensitivityLevel?: string; tags?: string }) {
+  return requestClient.putWithMsg<number>(`${Api.tableRoot}/batch-update`, data);
+}
+
+/** 查询治理统计（未配置分层/域/敏感等级的表数量） */
+export function metadataTableGovernanceStat() {
+  return requestClient.get<number[]>('/system/metadata/table/governance-stat');
+}
+
 /** 获取表字段列表 */
 export function metadataTableColumns(id: ID) {
   return requestClient.get<MetadataColumn[]>(`${Api.tableRoot}/${id}/columns`);
@@ -50,6 +60,11 @@ export function metadataTableColumns(id: ID) {
 /** 更新字段别名 */
 export function metadataColumnAlias(id: ID, alias: string) {
   return requestClient.putWithMsg<void>(Api.tableColumnAlias, null, { params: { id, alias } });
+}
+
+/** 更新字段（别名/注释/敏感等级） */
+export function metadataColumnUpdate(id: ID, data: { columnAlias?: string; columnComment?: string; sensitivityLevel?: string }) {
+  return requestClient.putWithMsg<void>(`/system/metadata/column/${id}/info`, data);
 }
 
 /** 导出字段列表 */

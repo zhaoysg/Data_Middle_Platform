@@ -201,6 +201,52 @@ public class MetadataTableServiceImpl implements IMetadataTableService {
         return baseMapper.updateById(table);
     }
 
+    @Override
+    public int batchUpdate(MetadataTableBo bo) {
+        List<Long> ids = bo.getIds();
+        if (ids == null || ids.isEmpty()) {
+            return 0;
+        }
+        for (Long id : ids) {
+            requireAccessibleTable(id);
+        }
+        int count = 0;
+        for (Long id : ids) {
+            MetadataTable table = new MetadataTable(id);
+            if (StringUtils.isNotBlank(bo.getDataLayer())) {
+                table.setDataLayer(bo.getDataLayer());
+            }
+            if (StringUtils.isNotBlank(bo.getDataDomain())) {
+                table.setDataDomain(bo.getDataDomain());
+            }
+            if (StringUtils.isNotBlank(bo.getSensitivityLevel())) {
+                table.setSensitivityLevel(bo.getSensitivityLevel());
+            }
+            if (StringUtils.isNotBlank(bo.getTags())) {
+                table.setTags(bo.getTags());
+            }
+            count += baseMapper.updateById(table);
+        }
+        return count;
+    }
+
+    @Override
+    public long[] countIncompleteTables() {
+        List<Long> accessibleDsIds = datasourceHelper.listAccessibleDatasourceIds();
+        if (accessibleDsIds.isEmpty()) {
+            return new long[]{0, 0, 0};
+        }
+        var wrapper = Wrappers.<MetadataTable>lambdaQuery()
+                .in(MetadataTable::getDsId, accessibleDsIds);
+        long noLayer = baseMapper.selectCount(wrapper.clone().isNull(MetadataTable::getDataLayer)
+                .or().eq(MetadataTable::getDataLayer, "")).longValue();
+        long noDomain = baseMapper.selectCount(wrapper.clone().isNull(MetadataTable::getDataDomain)
+                .or().eq(MetadataTable::getDataDomain, "")).longValue();
+        long noLevel = baseMapper.selectCount(wrapper.clone().isNull(MetadataTable::getSensitivityLevel)
+                .or().eq(MetadataTable::getSensitivityLevel, "")).longValue();
+        return new long[]{noLayer, noDomain, noLevel};
+    }
+
     private void applyAccessibleDatasourceFilter(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<MetadataTable> wrapper, Long dsId) {
         List<Long> accessibleDsIds = datasourceHelper.resolveAccessibleDatasourceIds(dsId);
         if (accessibleDsIds.isEmpty()) {

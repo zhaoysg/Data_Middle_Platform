@@ -2,8 +2,7 @@ package org.dromara.metadata.domain.vo;
 
 import cn.idev.excel.annotation.ExcelIgnoreUnannotated;
 import io.github.linpeilie.annotations.AutoMapper;
-import io.swagger.annotations.ApiModel;
-import io.swagger.annotations.ApiModelProperty;
+import io.swagger.v3.oas.annotations.media.Schema;
 import lombok.Data;
 import org.dromara.metadata.domain.SecColumnSensitivity;
 
@@ -17,7 +16,7 @@ import java.time.LocalDateTime;
  */
 @Data
 @ExcelIgnoreUnannotated
-@ApiModel("字段敏感记录")
+@Schema(description = "字段敏感记录")
 @AutoMapper(target = SecColumnSensitivity.class)
 public class SecColumnSensitivityVo implements Serializable {
 
@@ -28,67 +27,67 @@ public class SecColumnSensitivityVo implements Serializable {
 
     private Long dsId;
 
-    @ApiModelProperty("数据源名称")
+    @Schema(description = "数据源名称")
     private String dsName;
 
     private String tableName;
 
     private String columnName;
 
-    @ApiModelProperty("字段注释")
+    @Schema(description = "字段注释")
     private String columnComment;
 
     private String dataType;
 
-    @ApiModelProperty("敏感等级编码")
+    @Schema(description = "敏感等级编码")
     private String levelCode;
 
-    @ApiModelProperty("敏感等级名称")
+    @Schema(description = "敏感等级名称")
     private String levelName;
 
-    @ApiModelProperty("敏感等级颜色")
+    @Schema(description = "敏感等级颜色")
     private String levelColor;
 
-    @ApiModelProperty("数据分类编码")
+    @Schema(description = "数据分类编码")
     private String classCode;
 
-    @ApiModelProperty("数据分类名称")
+    @Schema(description = "数据分类名称")
     private String className;
 
-    @ApiModelProperty("匹配规则ID")
+    @Schema(description = "匹配规则ID")
     private Long matchRuleId;
 
-    @ApiModelProperty("匹配规则名称")
+    @Schema(description = "匹配规则名称")
     private String matchRuleName;
 
-    @ApiModelProperty("识别方式 AUTO/MANUAL")
+    @Schema(description = "识别方式 AUTO/MANUAL")
     private String identifiedBy;
 
-    @ApiModelProperty("确认状态 0待确认 1已确认")
+    @Schema(description = "确认状态 0待确认 1已确认")
     private String confirmed;
 
-    @ApiModelProperty("置信度 0-100")
+    @Schema(description = "置信度 0-100")
     private BigDecimal confidence;
 
-    @ApiModelProperty("置信度标签")
+    @Schema(description = "置信度标签")
     private String confidenceLabel;
 
-    @ApiModelProperty("建议脱敏方式")
+    @Schema(description = "建议脱敏方式")
     private String maskType;
 
-    @ApiModelProperty("建议脱敏方式标签")
+    @Schema(description = "建议脱敏方式标签")
     private String maskTypeLabel;
 
-    @ApiModelProperty("建议脱敏模板")
+    @Schema(description = "建议脱敏模板")
     private String maskPattern;
 
-    @ApiModelProperty("建议脱敏位置")
+    @Schema(description = "建议脱敏位置")
     private String maskPosition;
 
-    @ApiModelProperty("扫描批次号")
+    @Schema(description = "扫描批次号")
     private String scanBatchNo;
 
-    @ApiModelProperty("扫描时间")
+    @Schema(description = "扫描时间")
     private LocalDateTime scanTime;
 
     private Long scanTaskId;

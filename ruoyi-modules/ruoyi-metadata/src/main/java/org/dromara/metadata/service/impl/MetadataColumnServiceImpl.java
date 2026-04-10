@@ -136,6 +136,19 @@ public class MetadataColumnServiceImpl implements IMetadataColumnService {
         return baseMapper.updateById(column);
     }
 
+    @Override
+    public int updateColumn(MetadataColumnBo bo) {
+        requireAccessibleColumn(bo.getId());
+        // 业务编辑入口：显式写入别名/注释/敏感等级（含置空），避免 isNotBlank 导致无法保存空串
+        return baseMapper.update(null,
+            Wrappers.<MetadataColumn>lambdaUpdate()
+                .eq(MetadataColumn::getId, bo.getId())
+                .set(MetadataColumn::getColumnAlias, bo.getColumnAlias())
+                .set(MetadataColumn::getColumnComment, bo.getColumnComment())
+                .set(MetadataColumn::getSensitivityLevel, bo.getSensitivityLevel())
+                .set(bo.getSortOrder() != null, MetadataColumn::getSortOrder, bo.getSortOrder()));
+    }
+
     private void applyAccessibleDatasourceFilter(com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper<MetadataColumn> wrapper,
                                                  Long dsId, Long tableId) {
         if (tableId != null) {
