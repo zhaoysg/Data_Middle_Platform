@@ -1,6 +1,7 @@
 package org.dromara.metadata.service.impl;
 
 import com.alibaba.fastjson2.JSON;
+import com.baomidou.dynamic.datasource.toolkit.DynamicDataSourceContextHolder;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.dromara.common.core.exception.ServiceException;
@@ -30,7 +31,10 @@ import java.util.*;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DprofileServiceImpl implements IDprofileService {
+
+    private static final String BIGDATA_DS = "bigdata";
 
     private final DatasourceHelper datasourceHelper;
     private final DprofileReportMapper reportMapper;
@@ -61,65 +65,70 @@ public class DprofileServiceImpl implements IDprofileService {
     @Transactional(rollbackFor = Exception.class)
     public Long analyzeTable(Long dsId, String tableName, String level,
                              Set<String> targetColumns) {
-        TableStats tableStats = getTableStats(dsId, tableName);
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            TableStats tableStats = getTableStats(dsId, tableName);
 
-        DprofileReport report = new DprofileReport();
-        report.setTaskId(null);
-        report.setDsId(dsId);
-        report.setTableName(tableName);
-        report.setRowCount(tableStats.rowCount());
+            DprofileReport report = new DprofileReport();
+            report.setTaskId(null);
+            report.setDsId(dsId);
+            report.setTableName(tableName);
+            report.setRowCount(tableStats.rowCount());
 
-        List<ColumnStats> columnStatsList = Collections.emptyList();
+            List<ColumnStats> columnStatsList = Collections.emptyList();
 
-        if ("DETAILED".equalsIgnoreCase(level) || "FULL".equalsIgnoreCase(level)) {
-            columnStatsList = getColumnStats(dsId, tableName, targetColumns);
-            report.setColumnCount(columnStatsList.size());
-        } else {
-            report.setColumnCount(tableStats.columnCount());
+            if ("DETAILED".equalsIgnoreCase(level) || "FULL".equalsIgnoreCase(level)) {
+                columnStatsList = getColumnStats(dsId, tableName, targetColumns);
+                report.setColumnCount(columnStatsList.size());
+            } else {
+                report.setColumnCount(tableStats.columnCount());
+            }
+
+            report.setDataSizeBytes(tableStats.dataSizeBytes());
+            report.setStorageComment(tableStats.tableComment());
+            report.setLastModified(tableStats.lastModified() != null
+                ? LocalDateTime.parse(tableStats.lastModified().replace(" ", "T").substring(0, 19))
+                : null);
+
+            Map<String, Object> profileData = new HashMap<>();
+            profileData.put("rowCount", tableStats.rowCount());
+            profileData.put("columnCount", report.getColumnCount());
+            profileData.put("level", level);
+            if (targetColumns != null && !targetColumns.isEmpty()) {
+                profileData.put("targetColumns", targetColumns);
+            }
+            report.setProfileData(JSON.toJSONString(profileData));
+
+            reportMapper.insert(report);
+            Long reportId = report.getId();
+
+            for (ColumnStats cs : columnStatsList) {
+                DprofileColumnReport col = new DprofileColumnReport();
+                col.setReportId(reportId);
+                col.setDsId(dsId);
+                col.setTableName(tableName);
+                col.setColumnName(cs.columnName());
+                col.setDataType(cs.dataType());
+                col.setColumnComment(cs.columnComment());
+                col.setNullable(cs.nullable() ? "Y" : "N");
+                col.setIsPrimaryKey(cs.primaryKey() ? "Y" : "N");
+                col.setTotalCount(tableStats.rowCount());
+                col.setNullCount(cs.nullCount());
+                col.setNullRate(BigDecimal.valueOf(cs.nullRate()));
+                col.setUniqueCount(cs.uniqueCount());
+                col.setUniqueRate(BigDecimal.valueOf(cs.uniqueRate()));
+                col.setSampleValues(JSON.toJSONString(cs.sampleValues()));
+                col.setTopValues(JSON.toJSONString(cs.topValues()));
+                columnReportMapper.insert(col);
+            }
+
+            log.info("表 {} 探查完成，报告ID: {}, 行数: {}, 分析列数: {}, 级别: {}",
+                tableName, reportId, tableStats.rowCount(), columnStatsList.size(), level);
+
+            return reportId;
+        } finally {
+            DynamicDataSourceContextHolder.poll();
         }
-
-        report.setDataSizeBytes(tableStats.dataSizeBytes());
-        report.setStorageComment(tableStats.tableComment());
-        report.setLastModified(tableStats.lastModified() != null
-            ? LocalDateTime.parse(tableStats.lastModified().replace(" ", "T").substring(0, 19))
-            : null);
-
-        Map<String, Object> profileData = new HashMap<>();
-        profileData.put("rowCount", tableStats.rowCount());
-        profileData.put("columnCount", report.getColumnCount());
-        profileData.put("level", level);
-        if (targetColumns != null && !targetColumns.isEmpty()) {
-            profileData.put("targetColumns", targetColumns);
-        }
-        report.setProfileData(JSON.toJSONString(profileData));
-
-        reportMapper.insert(report);
-        Long reportId = report.getId();
-
-        for (ColumnStats cs : columnStatsList) {
-            DprofileColumnReport col = new DprofileColumnReport();
-            col.setReportId(reportId);
-            col.setDsId(dsId);
-            col.setTableName(tableName);
-            col.setColumnName(cs.columnName());
-            col.setDataType(cs.dataType());
-            col.setColumnComment(cs.columnComment());
-            col.setNullable(cs.nullable() ? "Y" : "N");
-            col.setIsPrimaryKey(cs.primaryKey() ? "Y" : "N");
-            col.setTotalCount(tableStats.rowCount());
-            col.setNullCount(cs.nullCount());
-            col.setNullRate(BigDecimal.valueOf(cs.nullRate()));
-            col.setUniqueCount(cs.uniqueCount());
-            col.setUniqueRate(BigDecimal.valueOf(cs.uniqueRate()));
-            col.setSampleValues(JSON.toJSONString(cs.sampleValues()));
-            col.setTopValues(JSON.toJSONString(cs.topValues()));
-            columnReportMapper.insert(col);
-        }
-
-        log.info("表 {} 探查完成，报告ID: {}, 行数: {}, 分析列数: {}, 级别: {}",
-            tableName, reportId, tableStats.rowCount(), columnStatsList.size(), level);
-
-        return reportId;
     }
 
     @Override

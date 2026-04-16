@@ -1,5 +1,6 @@
 package org.dromara.metadata.service.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
@@ -33,6 +34,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class SecClassificationServiceImpl implements ISecClassificationService {
 
     private final SecClassificationMapper baseMapper;

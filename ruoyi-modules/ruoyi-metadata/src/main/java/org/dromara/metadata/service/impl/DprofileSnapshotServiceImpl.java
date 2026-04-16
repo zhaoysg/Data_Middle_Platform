@@ -2,7 +2,7 @@ package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
 import com.alibaba.fastjson2.JSON;
-import com.alibaba.fastjson2.JSONObject;
+import com.baomidou.dynamic.datasource.toolkit.DynamicDataSourceContextHolder;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -13,18 +13,14 @@ import org.dromara.common.core.utils.StringUtils;
 import org.dromara.common.mybatis.core.page.PageQuery;
 import org.dromara.common.mybatis.core.page.TableDataInfo;
 import org.dromara.datasource.adapter.DataSourceAdapter;
-import org.dromara.metadata.domain.DprofileReport;
 import org.dromara.metadata.domain.DprofileSnapshot;
-import org.dromara.metadata.domain.bo.DprofileSnapshotBo;
 import org.dromara.metadata.domain.vo.*;
-import org.dromara.metadata.mapper.DprofileReportMapper;
 import org.dromara.metadata.mapper.DprofileSnapshotMapper;
 import org.dromara.metadata.service.IDprofileSnapshotService;
 import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
@@ -37,91 +33,115 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DprofileSnapshotServiceImpl implements IDprofileSnapshotService {
 
+    private static final String BIGDATA_DS = "bigdata";
+
     private final DprofileSnapshotMapper snapshotMapper;
-    private final DprofileReportMapper reportMapper;
     private final DatasourceHelper datasourceHelper;
 
     private static final DateTimeFormatter FORMATTER = DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
 
     @Override
     public TableDataInfo<DprofileSnapshotVo> queryPageList(DprofileSnapshotVo vo, PageQuery pageQuery) {
-        Wrapper<DprofileSnapshot> wrapper = buildQueryWrapper(vo);
-        var page = snapshotMapper.selectVoPage(pageQuery.build(), wrapper);
-        return TableDataInfo.build(page);
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            Wrapper<DprofileSnapshot> wrapper = buildQueryWrapper(vo);
+            var page = snapshotMapper.selectVoPage(pageQuery.build(), wrapper);
+            return TableDataInfo.build(page);
+        } finally {
+            DynamicDataSourceContextHolder.poll();
+        }
     }
 
     @Override
     public DprofileSnapshotVo queryById(Long id) {
-        return snapshotMapper.selectVoById(id);
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            return snapshotMapper.selectVoById(id);
+        } finally {
+            DynamicDataSourceContextHolder.poll();
+        }
     }
 
     @Override
     @Transactional(rollbackFor = Exception.class)
     public Long createSnapshot(Long dsId, String name, String desc) {
-        log.info("开始创建快照: dsId={}, name={}", dsId, name);
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            log.info("开始创建快照: dsId={}, name={}", dsId, name);
 
-        DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
-        List<String> tables = adapter.getTables();
+            DataSourceAdapter adapter = datasourceHelper.getAdapter(dsId);
+            List<String> tables = adapter.getTables();
 
-        Map<String, SnapshotCompareVo.TableSnapshotData> snapshotDataMap = new LinkedHashMap<>();
-        int processedCount = 0;
+            Map<String, SnapshotCompareVo.TableSnapshotData> snapshotDataMap = new LinkedHashMap<>();
+            int processedCount = 0;
 
-        for (String tableName : tables) {
-            try {
-                TableStats stats = getTableStatsFromAdapter(adapter, tableName);
-                Map<String, SnapshotCompareVo.ColumnSnapshotData> columnsMap = new LinkedHashMap<>();
+            for (String tableName : tables) {
+                try {
+                    TableStats stats = getTableStatsFromAdapter(adapter, tableName);
+                    Map<String, SnapshotCompareVo.ColumnSnapshotData> columnsMap = new LinkedHashMap<>();
 
-                // Get column stats
-                List<ColumnStats> columnStats = getColumnStatsFromAdapter(adapter, tableName);
-                for (ColumnStats cs : columnStats) {
-                    columnsMap.put(cs.columnName(), new SnapshotCompareVo.ColumnSnapshotData(
-                        cs.columnName(),
-                        cs.dataType(),
-                        cs.nullCount(),
-                        cs.nullRate(),
-                        cs.uniqueCount(),
-                        cs.uniqueRate()
-                    ));
+                    // Get column stats
+                    List<ColumnStats> columnStats = getColumnStatsFromAdapter(adapter, tableName);
+                    for (ColumnStats cs : columnStats) {
+                        columnsMap.put(cs.columnName(), new SnapshotCompareVo.ColumnSnapshotData(
+                            cs.columnName(),
+                            cs.dataType(),
+                            cs.nullCount(),
+                            cs.nullRate(),
+                            cs.uniqueCount(),
+                            cs.uniqueRate()
+                        ));
+                    }
+
+                    SnapshotCompareVo.TableSnapshotData tableData = new SnapshotCompareVo.TableSnapshotData(
+                        tableName,
+                        stats.rowCount(),
+                        stats.columnCount(),
+                        stats.lastModified(),
+                        columnsMap
+                    );
+
+                    snapshotDataMap.put(tableName, tableData);
+                    processedCount++;
+                } catch (Exception e) {
+                    log.warn("获取表 {} 的统计信息失败: {}", tableName, e.getMessage());
                 }
-
-                SnapshotCompareVo.TableSnapshotData tableData = new SnapshotCompareVo.TableSnapshotData(
-                    tableName,
-                    stats.rowCount(),
-                    stats.columnCount(),
-                    stats.lastModified(),
-                    columnsMap
-                );
-
-                snapshotDataMap.put(tableName, tableData);
-                processedCount++;
-            } catch (Exception e) {
-                log.warn("获取表 {} 的统计信息失败: {}", tableName, e.getMessage());
             }
+
+            // Create snapshot entity
+            DprofileSnapshot snapshot = new DprofileSnapshot();
+            snapshot.setSnapshotCode(generateSnapshotCode());
+            snapshot.setSnapshotName(name);
+            snapshot.setSnapshotDesc(desc);
+            snapshot.setDsId(dsId);
+            snapshot.setSnapshotData(JSON.toJSONString(snapshotDataMap));
+            snapshot.setTableCount(snapshotDataMap.size());
+
+            snapshotMapper.insert(snapshot);
+
+            log.info("快照创建完成: id={}, code={}, name={}, tableCount={}",
+                snapshot.getId(), snapshot.getSnapshotCode(), name, snapshotDataMap.size());
+
+            return snapshot.getId();
+        } finally {
+            DynamicDataSourceContextHolder.poll();
         }
-
-        // Create snapshot entity
-        DprofileSnapshot snapshot = new DprofileSnapshot();
-        snapshot.setSnapshotCode(generateSnapshotCode());
-        snapshot.setSnapshotName(name);
-        snapshot.setSnapshotDesc(desc);
-        snapshot.setDsId(dsId);
-        snapshot.setSnapshotData(JSON.toJSONString(snapshotDataMap));
-        snapshot.setTableCount(snapshotDataMap.size());
-
-        snapshotMapper.insert(snapshot);
-
-        log.info("快照创建完成: id={}, code={}, name={}, tableCount={}",
-            snapshot.getId(), snapshot.getSnapshotCode(), name, snapshotDataMap.size());
-
-        return snapshot.getId();
     }
 
     @Override
     public SnapshotCompareVo compareSnapshot(Long snapshotId1, Long snapshotId2) {
-        DprofileSnapshot snap1 = snapshotMapper.selectById(snapshotId1);
-        DprofileSnapshot snap2 = snapshotMapper.selectById(snapshotId2);
+        DprofileSnapshot snap1;
+        DprofileSnapshot snap2;
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            snap1 = snapshotMapper.selectById(snapshotId1);
+            snap2 = snapshotMapper.selectById(snapshotId2);
+        } finally {
+            DynamicDataSourceContextHolder.poll();
+        }
 
         if (snap1 == null) {
             throw new ServiceException("快照1不存在: " + snapshotId1);
@@ -193,8 +213,13 @@ public class DprofileSnapshotServiceImpl implements IDprofileSnapshotService {
     @Override
     @Transactional(rollbackFor = Exception.class)
     public void deleteById(Long id) {
-        snapshotMapper.deleteById(id);
-        log.info("删除快照: id={}", id);
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            snapshotMapper.deleteById(id);
+            log.info("删除快照: id={}", id);
+        } finally {
+            DynamicDataSourceContextHolder.poll();
+        }
     }
 
     @Override
@@ -203,8 +228,13 @@ public class DprofileSnapshotServiceImpl implements IDprofileSnapshotService {
         if (ids == null || ids.isEmpty()) {
             throw new ServiceException("删除的ID列表不能为空");
         }
-        snapshotMapper.deleteBatchIds(ids);
-        log.info("批量删除快照: ids={}", ids);
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            snapshotMapper.deleteBatchIds(ids);
+            log.info("批量删除快照: ids={}", ids);
+        } finally {
+            DynamicDataSourceContextHolder.poll();
+        }
     }
 
     private SnapshotCompareVo.TableChange compareTableData(

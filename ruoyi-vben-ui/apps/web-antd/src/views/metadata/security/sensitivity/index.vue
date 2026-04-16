@@ -216,7 +216,8 @@ const statusLabelMap: Record<string, string> = {
 </script>
 
 <template>
-  <Page :auto-content-height="true">
+  <div>
+    <Page :auto-content-height="true">
     <BasicTable table-title="字段敏感记录">
       <template #toolbar-tools>
         <Space>
@@ -397,7 +398,8 @@ const statusLabelMap: Record<string, string> = {
         </Button>
       </Space>
     </template>
-  </Modal>
+    </Modal>
+  </div>
 </template>
 
 <style scoped>

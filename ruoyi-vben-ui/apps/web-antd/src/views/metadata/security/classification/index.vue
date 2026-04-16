@@ -6,7 +6,7 @@ import type { SecClassification } from '#/api/metadata/model';
 
 import { PlusOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { Popconfirm, Skeleton, Space, Tag } from 'ant-design-vue';
+import { Popconfirm, Space, Tag } from 'ant-design-vue';
 import { ref } from 'vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
@@ -30,10 +30,6 @@ const formOptions: VbenFormProps = {
   ],
   wrapperClass: 'grid-cols-1 md:grid-cols-2 lg:grid-cols-4',
 };
-
-/* ---- 统计数据（从列表响应中聚合） ---- */
-const statsData = ref({ total: 0, enabled: 0, rules: 0, fields: 0 });
-const statsLoading = ref(false);
 
 const gridOptions: VxeGridProps = {
   checkboxConfig: { highlight: true, reserve: true },
@@ -106,21 +102,7 @@ const gridOptions: VxeGridProps = {
           pageNum: page?.currentPage,
           pageSize: page?.pageSize,
         };
-        statsLoading.value = true;
-        try {
-          const data = await secClassificationList(params);
-          // 同步聚合统计数据（与后端 enrichClassificationRows 结果一致）
-          const rows = (data?.rows ?? []) as SecClassification[];
-          statsData.value = {
-            total: data?.total ?? rows.length,
-            enabled: rows.filter((r) => r.enabled === '0').length,
-            rules: rows.reduce((s, r) => s + (r.ruleCount ?? 0), 0),
-            fields: rows.reduce((s, r) => s + (r.fieldCount ?? 0), 0),
-          };
-          return data || { rows: [], total: 0 };
-        } finally {
-          statsLoading.value = false;
-        }
+        return await secClassificationList(params) || { rows: [], total: 0 };
       },
     },
   },
@@ -163,159 +145,103 @@ function fmt(n: number | undefined) {
 </script>
 
 <template>
-  <!-- 不使用 auto-content-height：该页在表格上方还有页头/统计卡片，与敏感等级「仅 BasicTable」不同，固定内容高度会导致 VXE 表体被压扁、行重叠 -->
-  <Page class="clsf-page">
-    <!-- ========== 页面标题区 ========== -->
-    <div class="clsf-header">
-      <div class="clsf-header-left">
-        <div class="clsf-header-icon">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none">
-            <rect width="24" height="24" rx="6" fill="url(#hdrGrad)" />
-            <path d="M12 3L3 7.5V12L12 16.5L21 12V7.5L12 3Z" stroke="white" stroke-width="1.5" stroke-linejoin="round" />
-            <path d="M12 10.5V16.5" stroke="white" stroke-width="1.5" stroke-linecap="round" />
-            <defs>
-              <linearGradient id="hdrGrad" x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-                <stop offset="0%" stop-color="#722ED1" />
-                <stop offset="100%" stop-color="#9254DE" />
-              </linearGradient>
-            </defs>
-          </svg>
-        </div>
-        <div>
-          <h1 class="clsf-title">数据分类</h1>
-          <p class="clsf-subtitle">构建企业数据分类体系，为敏感字段识别提供分类依据</p>
-        </div>
-      </div>
-    </div>
-
-    <!-- ========== 统计卡片行 ========== -->
-    <div class="clsf-stats">
-      <div class="clsf-stat-card clsf-stat-card--purple">
-        <div class="clsf-stat-value">
-          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
-          <span v-else>{{ statsData.total }}</span>
-        </div>
-        <div class="clsf-stat-label">分类总数</div>
-      </div>
-      <div class="clsf-stat-card clsf-stat-card--green">
-        <div class="clsf-stat-value">
-          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
-          <span v-else>{{ statsData.enabled }}</span>
-        </div>
-        <div class="clsf-stat-label">启用分类</div>
-      </div>
-      <div class="clsf-stat-card clsf-stat-card--blue">
-        <div class="clsf-stat-value">
-          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
-          <span v-else>{{ statsData.rules }}</span>
-        </div>
-        <div class="clsf-stat-label">关联规则总数</div>
-      </div>
-      <div class="clsf-stat-card clsf-stat-card--orange">
-        <div class="clsf-stat-value">
-          <Skeleton :active="true" :paragraph="false" :title="{ width: '48px' }" v-if="statsLoading" />
-          <span v-else>{{ statsData.fields }}</span>
-        </div>
-        <div class="clsf-stat-label">敏感字段总数</div>
-      </div>
-    </div>
-
-    <!-- 表格区：与敏感等级页相同，直接 BasicTable，不做 flex 定高包裹 -->
-    <!-- 与页头/统计并存时禁止 h-full：否则表格外壳占满整页内容区，VXE+height:auto 内部行高会算崩、内容堆叠 -->
-    <BasicTable class="!h-auto w-full" table-title="数据分类">
-        <template #toolbar-tools>
-          <Space>
-            <a-button type="primary" @click="handleAdd">
-              <template #icon><PlusOutlined /></template>
-              新增分类
-            </a-button>
-            <a-button
-              :disabled="!vxeCheckboxChecked(tableApi)"
-              danger
-              type="primary"
-              @click="handleMultiDelete"
-            >
-              批量删除
-            </a-button>
-          </Space>
-        </template>
-
-        <!-- 分类名称单元格（名称 + 编码） -->
-        <template #classNameCell="{ row }">
-          <div class="clsf-name-cell">
-            <span class="clsf-name-text">{{ row.className ?? '—' }}</span>
-            <span class="clsf-name-code">{{ row.classCode ?? '' }}</span>
-          </div>
-        </template>
-
-        <!-- 关联等级 -->
-        <template #assocLevel="{ row }">
-          <Tag
-            v-if="row.defaultLevelName"
-            class="clsf-level-tag"
-            :style="{
-              color: row.defaultLevelColor || '#722ED1',
-              borderColor: row.defaultLevelColor || '#722ED1',
-              background: 'transparent',
-            }"
+  <Page :auto-content-height="true">
+    <BasicTable table-title="数据分类管理">
+      <template #toolbar-tools>
+        <Space>
+          <a-button type="primary" @click="handleAdd">
+            <template #icon><PlusOutlined /></template>
+            新增分类
+          </a-button>
+          <a-button
+            :disabled="!vxeCheckboxChecked(tableApi)"
+            danger
+            type="primary"
+            @click="handleMultiDelete"
           >
-            {{ row.defaultLevelName }}
-          </Tag>
-          <span v-else class="clsf-dash">—</span>
-        </template>
+            批量删除
+          </a-button>
+        </Space>
+      </template>
 
-        <!-- 规则数列（数字高亮） -->
-        <template #ruleCountCell="{ row }">
-          <span :class="['clsf-num', (row.ruleCount ?? 0) > 0 ? 'clsf-num--active' : '']">
-            {{ fmt(row.ruleCount) }}
-          </span>
-        </template>
+      <!-- 分类名称单元格（名称 + 编码） -->
+      <template #classNameCell="{ row }">
+        <div class="clsf-name-cell">
+          <span class="clsf-name-text">{{ row.className ?? '—' }}</span>
+          <span class="clsf-name-code">{{ row.classCode ?? '' }}</span>
+        </div>
+      </template>
 
-        <!-- 字段数列（数字高亮） -->
-        <template #fieldCountCell="{ row }">
-          <span :class="['clsf-num', (row.fieldCount ?? 0) > 0 ? 'clsf-num--active' : '']">
-            {{ fmt(row.fieldCount) }}
-          </span>
-        </template>
+      <!-- 关联等级 -->
+      <template #assocLevel="{ row }">
+        <Tag
+          v-if="row.defaultLevelName"
+          class="clsf-level-tag"
+          :style="{
+            color: row.defaultLevelColor || '#722ED1',
+            borderColor: row.defaultLevelColor || '#722ED1',
+            background: 'transparent',
+          }"
+        >
+          {{ row.defaultLevelName }}
+        </Tag>
+        <span v-else class="clsf-dash">—</span>
+      </template>
 
-        <!-- 启用状态 -->
-        <template #enabled="{ row }">
+      <!-- 规则数列（数字高亮） -->
+      <template #ruleCountCell="{ row }">
+        <span :class="['clsf-num', (row.ruleCount ?? 0) > 0 ? 'clsf-num--active' : '']">
+          {{ fmt(row.ruleCount) }}
+        </span>
+      </template>
+
+      <!-- 字段数列（数字高亮） -->
+      <template #fieldCountCell="{ row }">
+        <span :class="['clsf-num', (row.fieldCount ?? 0) > 0 ? 'clsf-num--active' : '']">
+          {{ fmt(row.fieldCount) }}
+        </span>
+      </template>
+
+      <!-- 启用状态 -->
+      <template #enabled="{ row }">
           <TableSwitch
             v-model:value="row.enabled"
-            :api="() => secClassificationUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+            checked-value="1"
+            un-checked-value="0"
+            :api="() => secClassificationUpdate({ id: row.id, enabled: row.enabled === '1' ? '0' : '1' })"
             @reload="tableApi.query()"
           />
-        </template>
+      </template>
 
-        <!-- 操作列 -->
-        <template #action="{ row }">
-          <Space>
-            <a-button type="link" size="small" class="clsf-action-edit" @click="handleEdit(row)">编辑</a-button>
-            <Popconfirm title="确认删除该分类？" @confirm="handleDelete(row)">
-              <a-button type="link" size="small" danger class="clsf-action-del">删除</a-button>
-            </Popconfirm>
-          </Space>
-        </template>
+      <!-- 操作列 -->
+      <template #action="{ row }">
+        <Space>
+          <a-button type="link" size="small" class="clsf-action-edit" @click="handleEdit(row)">编辑</a-button>
+          <Popconfirm title="确认删除该分类？" @confirm="handleDelete(row)">
+            <a-button type="link" size="small" danger class="clsf-action-del">删除</a-button>
+          </Popconfirm>
+        </Space>
+      </template>
 
-        <!-- 空状态 -->
-        <template #empty>
-          <div class="clsf-empty">
-            <div class="clsf-empty-icon">
-              <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
-                <circle cx="24" cy="24" r="22" stroke="#E8E8E8" stroke-width="2" />
-                <path d="M24 14L14 18.5V25.5L24 30L34 25.5V18.5L24 14Z" stroke="#D9D9D9" stroke-width="1.5" stroke-linejoin="round" />
-                <path d="M14 30L24 34.5L34 30" stroke="#D9D9D9" stroke-width="1.5" stroke-linejoin="round" />
-                <path d="M14 24L24 28.5L34 24" stroke="#D9D9D9" stroke-width="1.5" stroke-linejoin="round" />
-              </svg>
-            </div>
-            <p class="clsf-empty-title">暂无数据分类</p>
-            <p class="clsf-empty-desc">建立数据分类体系，为敏感字段识别提供分类依据</p>
-            <a-button type="primary" class="clsf-empty-btn" @click="handleAdd">
-              <template #icon><PlusOutlined /></template>
-              新增分类
-            </a-button>
+      <!-- 空状态 -->
+      <template #empty>
+        <div class="clsf-empty">
+          <div class="clsf-empty-icon">
+            <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+              <circle cx="24" cy="24" r="22" stroke="#E8E8E8" stroke-width="2" />
+              <path d="M24 14L14 18.5V25.5L24 30L34 25.5V18.5L24 14Z" stroke="#D9D9D9" stroke-width="1.5" stroke-linejoin="round" />
+              <path d="M14 30L24 34.5L34 30" stroke="#D9D9D9" stroke-width="1.5" stroke-linejoin="round" />
+              <path d="M14 24L24 28.5L34 24" stroke="#D9D9D9" stroke-width="1.5" stroke-linejoin="round" />
+            </svg>
           </div>
-        </template>
+          <p class="clsf-empty-title">暂无数据分类</p>
+          <p class="clsf-empty-desc">建立数据分类体系，为敏感字段识别提供分类依据</p>
+          <a-button type="primary" class="clsf-empty-btn" @click="handleAdd">
+            <template #icon><PlusOutlined /></template>
+            新增分类
+          </a-button>
+        </div>
+      </template>
     </BasicTable>
 
     <ClassificationDrawer @reload="tableApi.query()" />
@@ -323,119 +249,19 @@ function fmt(n: number | undefined) {
 </template>
 
 <style scoped>
-/* ================================================================
-   数据分类页面 — 设计系统
-   设计方向：SaaS Data Platform — 紫蓝渐变主色，白底卡片，清晰层次
-   ================================================================ */
+/* ---- 页面标题 ---- */
+.vxe-grid--full-wrapper {
+  margin-top: 0;
+}
 
-/* ---- 页面容器（仅布局装饰，不参与定高挤压表格） ---- */
-.clsf-page {
+/* 表格行间距 */
+:deep(.vxe-body--row .vxe-cell) {
+  padding-top: 8px;
   padding-bottom: 8px;
-}
-
-/* 兜底：保证表体行有足够行高（避免极端布局下单元格纵向压扁） */
-.clsf-page :deep(.vxe-body--row .vxe-cell) {
-  min-height: 48px;
-  padding-top: 10px;
-  padding-bottom: 10px;
   vertical-align: middle;
-  box-sizing: border-box;
 }
-.clsf-page :deep(.vxe-body--row) {
-  min-height: 48px;
-}
-
-/* ---- 页面标题区 ---- */
-.clsf-header {
-  display: flex;
-  align-items: center;
-  justify-content: flex-start;
-  padding: 20px 24px 16px;
-  background: linear-gradient(135deg, #fafafa 0%, #f5f0ff 100%);
-  border-bottom: 1px solid #f0e8ff;
-}
-.clsf-header-left {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-}
-.clsf-header-icon {
-  flex-shrink: 0;
-  width: 40px;
-  height: 40px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: linear-gradient(135deg, #722ED1 0%, #9254DE 100%);
-  border-radius: 10px;
-  box-shadow: 0 2px 8px rgba(114, 46, 209, 0.3);
-}
-.clsf-title {
-  font-size: 18px;
-  font-weight: 600;
-  color: #1a1a2e;
-  margin: 0;
-  line-height: 1.4;
-  letter-spacing: -0.01em;
-}
-.clsf-subtitle {
-  font-size: 13px;
-  color: #8c8ca1;
-  margin: 2px 0 0;
-  line-height: 1.5;
-}
-
-/* ---- 统计卡片行 ---- */
-.clsf-stats {
-  display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 12px;
-  padding: 16px 24px 8px;
-}
-@media (max-width: 768px) {
-  .clsf-stats { grid-template-columns: repeat(2, 1fr); }
-}
-.clsf-stat-card {
-  padding: 16px 18px 14px;
-  border-radius: 10px;
-  border: 1px solid transparent;
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.06);
-  position: relative;
-  overflow: hidden;
-  transition: box-shadow 0.2s ease, transform 0.2s ease;
-}
-.clsf-stat-card::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  opacity: 0.06;
-}
-.clsf-stat-card:hover {
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
-}
-.clsf-stat-card--purple { background: linear-gradient(135deg, #f5f0ff 0%, #ede4ff 100%); border-color: #d9b8ff; }
-.clsf-stat-card--purple::before { background: #722ED1; }
-.clsf-stat-card--green  { background: linear-gradient(135deg, #f0fff4 0%, #d9f5e0 100%); border-color: #b7eb8f; }
-.clsf-stat-card--green::before  { background: #52C41A; }
-.clsf-stat-card--blue   { background: linear-gradient(135deg, #f0f7ff 0%, #d6ecff 100%); border-color: #91caff; }
-.clsf-stat-card--blue::before   { background: #1677FF; }
-.clsf-stat-card--orange { background: linear-gradient(135deg, #fff7e6 0%, #ffe7b0 100%); border-color: #ffd591; }
-.clsf-stat-card--orange::before { background: #FA8C16; }
-
-.clsf-stat-value {
-  font-size: 26px;
-  font-weight: 700;
-  color: #1a1a2e;
-  line-height: 1.2;
-  margin-bottom: 4px;
-  letter-spacing: -0.02em;
-}
-.clsf-stat-label {
-  font-size: 12px;
-  color: #8c8ca1;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+:deep(.vxe-body--row) {
+  min-height: 36px;
 }
 
 /* ---- 分类名称单元格 ---- */

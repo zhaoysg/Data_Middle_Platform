@@ -31,6 +31,7 @@ import java.util.regex.Pattern;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class MaskQueryServiceImpl implements IMaskQueryService {
 
     private final DatasourceHelper datasourceHelper;

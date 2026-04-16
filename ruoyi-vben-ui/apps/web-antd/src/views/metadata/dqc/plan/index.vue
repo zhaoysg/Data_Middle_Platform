@@ -6,17 +6,16 @@ import type { DqcPlan } from '#/api/metadata/model';
 
 import { PlusOutlined, PlayCircleOutlined } from '@ant-design/icons-vue';
 import { Page, useVbenDrawer } from '@vben/common-ui';
-import { Popconfirm, Space, Tag } from 'ant-design-vue';
+import { Popconfirm, Space, Tag, message } from 'ant-design-vue';
+import { ref } from 'vue';
 
 import { useVbenVxeGrid, vxeCheckboxChecked } from '#/adapter/vxe-table';
 import {
-  dqcPlanAdd,
   dqcPlanDisable,
   dqcPlanExecute,
   dqcPlanList,
   dqcPlanPublish,
   dqcPlanRemove,
-  dqcPlanUpdate,
 } from '#/api/metadata/dqc/plan';
 
 import planDrawer from './plan-drawer.vue';
@@ -67,16 +66,16 @@ const gridOptions: VxeGridProps = {
   checkboxConfig: { highlight: true, reserve: true },
   columns: [
     { type: 'checkbox', width: 50, fixed: 'left' },
-    { title: '方案名称', field: 'planName', width: 200, fixed: 'left' },
-    { title: '方案编码', field: 'planCode', width: 160 },
-    { title: '数据层', field: 'layerCode', width: 80 },
-    { title: '触发方式', field: 'triggerType', width: 100 },
-    { title: '涉及表', field: 'tableCount', width: 80 },
-    { title: '规则数', field: 'ruleCount', width: 80 },
+    { title: '方案名称', field: 'planName', minWidth: 200, fixed: 'left' },
+    { title: '方案编码', field: 'planCode', minWidth: 160 },
+    { title: '数据层', field: 'layerCode', width: 70 },
+    { title: '触发方式', field: 'triggerType', width: 90, slots: { default: 'triggerType' } },
+    { title: '涉及表', field: 'tableCount', width: 70 },
+    { title: '规则数', field: 'ruleCount', width: 70 },
     { title: '最近得分', field: 'lastScore', width: 90 },
     { title: '状态', field: 'status', width: 90, slots: { default: 'status' } },
-    { title: '创建时间', field: 'createTime', width: 180 },
-    { title: '操作', field: 'action', width: 180, fixed: 'right', slots: { default: 'action' } },
+    { title: '创建时间', field: 'createTime', minWidth: 170 },
+    { title: '操作', field: 'action', width: 220, fixed: 'right', slots: { default: 'action' } },
   ],
   height: 'auto',
   proxyConfig: {
@@ -100,6 +99,12 @@ const gridOptions: VxeGridProps = {
 const [BasicTable, tableApi] = useVbenVxeGrid({ formOptions, gridOptions });
 const [PlanDrawer, drawerApi] = useVbenDrawer({ connectedComponent: planDrawer });
 
+const executingPlanId = ref<number | null>(null);
+
+function isPlanExecuting(planId: number) {
+  return executingPlanId.value === planId;
+}
+
 function handleAdd() {
   drawerApi.setData({});
   drawerApi.open();
@@ -111,8 +116,16 @@ function handleEdit(record: DqcPlan) {
 }
 
 async function handleExecute(row: DqcPlan) {
-  await dqcPlanExecute(row.id!);
-  await tableApi.query();
+  executingPlanId.value = row.id!;
+  try {
+    await dqcPlanExecute(row.id!);
+    message.success('执行已启动，请前往「执行记录」查看进度');
+    await tableApi.query();
+  } catch {
+    // error already shown by interceptor
+  } finally {
+    executingPlanId.value = null;
+  }
 }
 
 async function handleDelete(row: DqcPlan) {
@@ -130,11 +143,16 @@ async function handleDisable(row: DqcPlan) {
   await tableApi.query();
 }
 
+async function handleEnable(row: DqcPlan) {
+  await dqcPlanPublish(row.id!);
+  await tableApi.query();
+}
+
 async function handleMultiDelete() {
   const rows = tableApi.grid.getCheckboxRecords();
   const ids = rows
     .map((row: DqcPlan) => row.id)
-    .filter((id): id is number => id !== undefined);
+    .filter((id): id is string | number => id !== undefined);
   await dqcPlanRemove(ids);
   await tableApi.query();
 }
@@ -166,16 +184,28 @@ async function handleMultiDelete() {
           {{ statusLabelMap[row.status || ''] || row.status || '-' }}
         </Tag>
       </template>
+      <template #triggerType="{ row }">
+        <Tag>{{ triggerTypeLabelMap[row.triggerType || ''] || row.triggerType || '-' }}</Tag>
+      </template>
       <template #action="{ row }">
         <Space>
           <a-button type="link" size="small" @click="handleEdit(row)">编辑</a-button>
           <a-button
-            v-if="row.status === 'DRAFT' || row.status === 'DISABLED'"
+            v-if="row.status === 'DRAFT'"
             type="link"
             size="small"
             @click="handlePublish(row)"
           >
             发布
+          </a-button>
+          <a-button
+            v-if="row.status === 'DISABLED'"
+            type="link"
+            size="small"
+            style="color: #1677ff; font-weight: 500"
+            @click="handleEnable(row)"
+          >
+            启用
           </a-button>
           <a-button
             v-if="row.status === 'PUBLISHED'"
@@ -188,13 +218,14 @@ async function handleMultiDelete() {
           <a-button
             type="link"
             size="small"
-            :disabled="row.status !== 'PUBLISHED'"
+            :loading="isPlanExecuting(row.id!)"
+            :disabled="row.status !== 'PUBLISHED' && !isPlanExecuting(row.id!)"
             @click="handleExecute(row)"
           >
             <template #icon>
               <PlayCircleOutlined />
             </template>
-            执行
+            {{ isPlanExecuting(row.id!) ? '执行中...' : '执行' }}
           </a-button>
           <Popconfirm title="确认删除？" @confirm="handleDelete(row)">
             <a-button type="link" size="small" danger>删除</a-button>

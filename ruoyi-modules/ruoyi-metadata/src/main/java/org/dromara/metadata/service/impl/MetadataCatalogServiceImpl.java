@@ -1,6 +1,7 @@
 package org.dromara.metadata.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
@@ -19,8 +20,6 @@ import org.dromara.metadata.domain.vo.MetadataCatalogVo;
 import org.dromara.metadata.mapper.MetadataCatalogMapper;
 import org.dromara.metadata.service.IMetadataCatalogService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -62,7 +61,7 @@ public class MetadataCatalogServiceImpl implements IMetadataCatalogService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public Long insertCatalog(MetadataCatalogBo bo) {
         if (StringUtils.isNotBlank(bo.getCatalogCode())) {
             MetadataCatalog exist = baseMapper.selectByCatalogCode(bo.getCatalogCode());
@@ -78,7 +77,7 @@ public class MetadataCatalogServiceImpl implements IMetadataCatalogService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int updateCatalog(MetadataCatalogBo bo) {
         if (ObjectUtil.isNull(bo.getId())) {
             throw new ServiceException("目录ID不能为空");
@@ -98,7 +97,7 @@ public class MetadataCatalogServiceImpl implements IMetadataCatalogService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteCatalog(Long[] ids) {
         for (Long id : ids) {
             boolean hasChildren = baseMapper.exists(Wrappers.<MetadataCatalog>lambdaQuery()

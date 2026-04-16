@@ -181,33 +181,33 @@ export interface DqcRuleTemplate {
 
 /** DQC规则定义 */
 export interface DqcRuleDef {
-  id?: number;
+  id?: string;
   ruleCode?: string;
   ruleName?: string;
   ruleDesc?: string;
-  templateId?: number;
+  templateId?: string;
   templateName?: string;
   /** 关联元数据表ID (metadata_table.id) */
-  tableId?: number;
+  tableId?: string;
   /** 关联元数据字段ID (metadata_column.id) */
-  columnId?: number;
+  columnId?: string;
   /** 元数据表名称（用于展示） */
   tableName?: string;
   /** 元数据字段名称（用于展示） */
   columnName?: string;
   /** 数据源ID（从元数据获取） */
-  dsId?: number;
+  dsId?: string;
   ruleType?: string;
   /** 质量维度，多个英文逗号分隔 */
   dimensions?: string;
   applyLevel?: string;
   ruleExpr?: string;
-  targetDsId?: number;
+  targetDsId?: string;
   targetDsName?: string;
   dsName?: string;
   targetTable?: string;
   targetColumn?: string;
-  compareDsId?: number;
+  compareDsId?: string;
   compareTable?: string;
   compareColumn?: string;
   thresholdMin?: number | string;
@@ -225,13 +225,13 @@ export interface DqcRuleDef {
 
 /** DQC质检方案 */
 export interface DqcPlan {
-  id?: number;
+  id?: string;
   planCode?: string;
   planName?: string;
   planDesc?: string;
   bindType?: string; // TABLE / SENSITIVITY_LEVEL
   bindValue?: string; // JSON: { dsId, schema, tables, bindSensitivityLevel }
-  dsId?: number;
+  dsId?: string;
   dsName?: string;
   layerCode?: string;
   triggerType?: string; // MANUAL / SCHEDULE / API
@@ -243,7 +243,7 @@ export interface DqcPlan {
   status?: string; // DRAFT / PUBLISHED / DISABLED
   ruleCount?: number;
   tableCount?: number;
-  lastExecutionId?: number;
+  lastExecutionId?: string;
   lastScore?: number;
   lastExecutionTime?: string;
   sensitivityLevel?: string;
@@ -257,9 +257,9 @@ export interface DqcPlan {
 
 /** DQC方案-规则绑定记录 */
 export interface DqcPlanRule {
-  id?: number;
-  planId?: number;
-  ruleId?: number;
+  id?: string;
+  planId?: string;
+  ruleId?: string;
   targetTable?: string;
   targetColumn?: string;
   sortOrder?: number;
@@ -289,13 +289,14 @@ export interface DqcRuleSelectorItem {
 
 /** DQC执行记录 */
 export interface DqcExecution {
-  id?: number;
+  id?: string;
   executionNo?: string;
-  planId?: number;
+  planId?: string;
   planName?: string;
   layerCode?: string;
   triggerType?: string;
-  triggerUser?: number;
+  triggerTypeText?: string;
+  triggerUser?: string;
   startTime?: string;
   endTime?: string;
   elapsedMs?: number;
@@ -311,9 +312,9 @@ export interface DqcExecution {
 
 /** DQC执行明细 */
 export interface DqcExecutionDetail {
-  id?: number;
-  executionId?: number;
-  ruleId?: number;
+  id?: string;
+  executionId?: string;
+  ruleId?: string;
   ruleName?: string;
   ruleCode?: string;
   ruleType?: string;

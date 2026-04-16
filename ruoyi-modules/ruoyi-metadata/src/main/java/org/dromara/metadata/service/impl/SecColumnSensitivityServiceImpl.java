@@ -2,6 +2,8 @@ package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
 import cn.hutool.json.JSONUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
@@ -28,8 +30,6 @@ import org.dromara.metadata.service.ISecSensitivityRuleService;
 import org.dromara.metadata.support.DatasourceHelper;
 import org.redisson.api.RLock;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.*;
@@ -44,6 +44,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivityService {
 
     private final SecColumnSensitivityMapper baseMapper;
@@ -76,7 +77,7 @@ public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivitySer
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public SecScanResultVO scanSensitiveFields(SecSensitivityScanDTO dto) {
         if (dto.getDsId() == null) {
             throw new ServiceException("数据源ID不能为空");
@@ -375,7 +376,7 @@ public class SecColumnSensitivityServiceImpl implements ISecColumnSensitivitySer
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int confirmColumns(List<Long> ids) {
         if (CollUtil.isEmpty(ids)) {
             return 0;

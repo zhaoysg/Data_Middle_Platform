@@ -34,6 +34,7 @@ import {
   datasourceColumns,
   datasourceSchemas,
 } from '#/api/system/datasource';
+import { metadataLayerOptions } from '#/api/metadata/layer';
 import {
   dqcPlanAdd,
   dqcPlanBindRules,
@@ -58,12 +59,24 @@ const triggerTypeTagColor: Record<string, string> = {
   API: 'cyan',
 };
 
-/** 敏感等级（无 Emoji，便于对齐与无障碍） */
+const statusTextMap: Record<string, string> = {
+  DRAFT: '草稿',
+  PUBLISHED: '已发布',
+  DISABLED: '已禁用',
+};
+
+const statusTagColor: Record<string, string> = {
+  DRAFT: 'default',
+  PUBLISHED: 'success',
+  DISABLED: 'warning',
+};
+
+/** 敏感等级（无 Emoji，便于对齐与无障碍） - 下拉选项 */
 const sensitivityLevelOptions = [
-  { value: 'L4', title: 'L4 机密', hint: '最高敏感', level: 'L4' as const },
-  { value: 'L3', title: 'L3 敏感', hint: '高敏感', level: 'L3' as const },
-  { value: 'L2', title: 'L2 内部', hint: '内部可见', level: 'L2' as const },
-  { value: 'L1', title: 'L1 公开', hint: '可公开', level: 'L1' as const },
+  { value: 'L4', label: 'L4 机密', desc: '最高敏感' },
+  { value: 'L3', label: 'L3 敏感', desc: '高敏感' },
+  { value: 'L2', label: 'L2 内部', desc: '内部可见' },
+  { value: 'L1', label: 'L1 公开', desc: '可公开' },
 ];
 
 const sensitivityTextColor: Record<string, string> = {
@@ -81,20 +94,41 @@ const sensitivityBgColor: Record<string, string> = {
 };
 
 const errorLevelOptions = [
-  { label: '高告警', value: 'HIGH' },
-  { label: '中告警', value: 'MEDIUM' },
-  { label: '低告警', value: 'LOW' },
+  { label: '高告警', value: 'HIGH', color: 'red' },
+  { label: '中告警', value: 'MEDIUM', color: 'orange' },
+  { label: '低告警', value: 'LOW', color: 'blue' },
+  { label: '严重告警', value: 'CRITICAL', color: 'purple' },
 ];
 
 const errorLevelColor: Record<string, string> = {
   HIGH: 'red',
   MEDIUM: 'orange',
   LOW: 'blue',
+  CRITICAL: 'purple',
 };
+
+const ruleStrengthOptions = [
+  { label: '强规则', value: 'STRONG', color: 'red' },
+  { label: '弱规则', value: 'WEAK', color: 'orange' },
+];
 
 const ruleStrengthColor: Record<string, string> = {
   STRONG: 'red',
   WEAK: 'orange',
+};
+
+const applyLevelOptions = [
+  { label: '表级', value: 'TABLE' },
+  { label: '字段级', value: 'COLUMN' },
+  { label: '跨字段', value: 'CROSS_FIELD' },
+  { label: '跨表', value: 'CROSS_TABLE' },
+];
+
+const applyLevelColor: Record<string, string> = {
+  TABLE: 'blue',
+  COLUMN: 'green',
+  CROSS_FIELD: 'purple',
+  CROSS_TABLE: 'cyan',
 };
 
 /** 与 bgdata 质检方案向导一致：主标题 + 副标题 */
@@ -108,7 +142,7 @@ const steps = [
 
 const emit = defineEmits<{ reload: [] }>();
 
-const recordId = ref<number>();
+const recordId = ref<string | number>();
 const currentStep = ref(0);
 const submitting = ref(false);
 const wizardRef = ref<InstanceType<typeof WizardDrawer>>();
@@ -122,8 +156,8 @@ const formValues = ref<Record<string, any>>({
 });
 
 // ---- 数据源相关 ----
-const datasourceOptions = ref<{ label: string; value: number; dsType?: string }[]>([]);
-const bindDsId = ref<number>();
+const datasourceOptions = ref<{ label: string; value: string; dsType?: string }[]>([]);
+const bindDsId = ref<string>();
 const dsType = ref<string>();
 const tableLoading = ref(false);
 /** 数据源下全部表名（仅作下拉选项，勿与已选混淆） */
@@ -131,6 +165,10 @@ const tableCatalog = ref<string[]>([]);
 /** 用户勾选要质检的表 */
 const selectedTables = ref<string[]>([]);
 const selectedTableSet = ref<Set<string>>(new Set());
+
+// ---- 分层标签相关 ----
+const layerOptions = ref<{ label: string; value: string }[]>([]);
+const layerLoading = ref(false);
 
 // ---- Schema 相关（PostgreSQL） ----
 const schemaList = ref<string[]>([]);
@@ -164,6 +202,28 @@ const tableSelectPlaceholder = computed(() => {
   return '搜索或选择表名（可多选）';
 });
 
+function hasAccessibleDatasource(dsId?: string) {
+  if (!dsId) return false;
+  return datasourceOptions.value.some((d) => d.value === dsId);
+}
+
+function normalizeDatasourceId(value: unknown): string | undefined {
+  if (value === null || value === undefined || value === '') {
+    return undefined;
+  }
+  return String(value);
+}
+
+function resetUnavailableDatasourceBinding() {
+  bindDsId.value = undefined;
+  dsType.value = undefined;
+  bindSchema.value = '';
+  tableCatalog.value = [];
+  selectedTables.value = [];
+  selectedTableSet.value = new Set();
+  tableBindings.value = [];
+}
+
 // ---- 字段+规则扁平行 ----
 interface FlatRow {
   key: string;
@@ -179,7 +239,6 @@ const ruleSelectorColumn = ref<string>();
 const ruleSelectorLoading = ref(false);
 const allRules = ref<any[]>([]);
 const selectedRuleIds = ref<number[]>([]);
-const ruleSelectorLoading2 = ref(false);
 
 // ---- API规则列表参数 ----
 const ruleFilterKeyword = ref<string>();
@@ -199,11 +258,25 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
       const dsList = await datasourceEnabled();
       datasourceOptions.value = (dsList || []).map((item: any) => ({
         label: `${item.dsName || item.datasourceName || ''}`,
-        value: item.dsId || item.id,
+        value: normalizeDatasourceId(item.dsId ?? item.id) || '',
         dsType: item.dsType,
       }));
 
-      const { id } = drawerApi.getData() as { id?: number };
+      // 加载数仓分层下拉选项
+      layerLoading.value = true;
+      try {
+        const layers = await metadataLayerOptions();
+        layerOptions.value = (layers || []).map((l: any) => ({
+          label: `${l.layerName || l.layerCode || ''}`,
+          value: l.layerCode,
+        }));
+      } catch (_) {
+        layerOptions.value = [];
+      } finally {
+        layerLoading.value = false;
+      }
+
+      const { id } = drawerApi.getData() as { id?: string | number };
       if (id) {
         recordId.value = id;
         tableCatalog.value = [];
@@ -212,34 +285,39 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
         tableBindings.value = [];
         const info = await dqcPlanInfo(id);
         formValues.value = { ...info };
-        bindDsId.value = info.dsId;
+        bindDsId.value = normalizeDatasourceId(info.dsId);
+        let needsDatasourceRebind = false;
 
         // 解析 bindValue JSON，填充绑定配置
         if (info.bindValue) {
           try {
             const bv = JSON.parse(info.bindValue);
-            if (bv.dsId) bindDsId.value = Number(bv.dsId);
+            const boundDsId = normalizeDatasourceId(bv.dsId);
+            if (boundDsId) bindDsId.value = boundDsId;
             if (bv.schema) bindSchema.value = bv.schema;
 
-            if (bv.dsId) {
-              const ds = datasourceOptions.value.find((d) => d.value === Number(bv.dsId));
+            if (bindDsId.value && !hasAccessibleDatasource(bindDsId.value)) {
+              needsDatasourceRebind = true;
+              resetUnavailableDatasourceBinding();
+            } else if (boundDsId) {
+              const ds = datasourceOptions.value.find((d) => d.value === boundDsId);
               if (ds) dsType.value = ds.dsType;
 
               // PostgreSQL 加载 Schema
               if (isPostgresBind.value) {
                 schemaLoading.value = true;
                 try {
-                  const schemas = await datasourceSchemas(Number(bv.dsId));
-                  schemaList.value = schemas?.data || schemas || [];
+                  const schemas = await datasourceSchemas(boundDsId);
+                  schemaList.value = schemas || [];
                 } catch (_) {}
                 finally { schemaLoading.value = false; }
               }
             }
 
-            if (bv.dsId) {
+            if (boundDsId && !needsDatasourceRebind) {
               try {
                 const catalog = await datasourceTables(
-                  Number(bv.dsId),
+                  boundDsId,
                   bv.schema || undefined,
                 );
                 tableCatalog.value = catalog || [];
@@ -247,7 +325,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
                 tableCatalog.value = [];
               }
             }
-            if (bv.tables && Array.isArray(bv.tables)) {
+            if (bv.tables && Array.isArray(bv.tables) && !needsDatasourceRebind) {
               selectedTables.value = [...bv.tables];
               selectedTableSet.value = new Set(bv.tables);
               for (const tbl of bv.tables) {
@@ -260,8 +338,16 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
           } catch (_) {}
         }
 
+        if (bindDsId.value && !hasAccessibleDatasource(bindDsId.value)) {
+          needsDatasourceRebind = true;
+          resetUnavailableDatasourceBinding();
+        }
+        if (needsDatasourceRebind) {
+          message.warning('当前方案绑定的数据源不可用（可能已停用、删除或无权限访问），请重新选择数据源');
+        }
+
         // 无 bindValue / 旧数据：仍根据 dsId 拉表清单，避免编辑时下拉为空
-        if (bindDsId.value) {
+        if (bindDsId.value && hasAccessibleDatasource(bindDsId.value)) {
           const ds = datasourceOptions.value.find((d) => d.value === bindDsId.value);
           if (ds) dsType.value = ds.dsType;
           if (
@@ -282,7 +368,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
             schemaLoading.value = true;
             try {
               const schemas = await datasourceSchemas(bindDsId.value);
-              schemaList.value = schemas?.data || schemas || [];
+              schemaList.value = schemas || [];
             } catch (_) {}
             finally {
               schemaLoading.value = false;
@@ -317,7 +403,7 @@ const [BasicDrawer, drawerApi] = useVbenDrawer({
 });
 
 // ---- 加载已绑定规则到 tableBindings ----
-async function loadBoundRules(planId: number) {
+async function loadBoundRules(planId: string | number) {
   try {
     const bound: any[] = await dqcPlanBoundRules(planId);
     for (const b of bound || []) {
@@ -329,7 +415,7 @@ async function loadBoundRules(planId: number) {
           binding.columnRules[col] = [];
         }
         if (col) {
-          binding.columnRules[col].push({
+          (binding.columnRules[col] ??= []).push({
             id: b.ruleId,
             ruleId: b.ruleId,
             ruleName: b.ruleName || `规则${b.ruleId}`,
@@ -346,32 +432,33 @@ async function loadBoundRules(planId: number) {
 }
 
 // ---- 数据源切换，加载表列表和 Schema ----
-async function onDsChange(dsId: number) {
-  bindDsId.value = dsId;
+async function onDsChange(dsId: string | number | undefined) {
+  const normalizedDsId = normalizeDatasourceId(dsId);
+  bindDsId.value = normalizedDsId;
   bindSchema.value = '';
   schemaList.value = [];
   tableBindings.value = [];
   tableCatalog.value = [];
   selectedTables.value = [];
   selectedTableSet.value = new Set();
-  if (!dsId) return;
+  if (!normalizedDsId) return;
 
-  const ds = datasourceOptions.value.find((d) => d.value === dsId);
+  const ds = datasourceOptions.value.find((d) => d.value === normalizedDsId);
   dsType.value = ds?.dsType;
 
   // PostgreSQL 加载 Schema 列表
   if (ds?.dsType?.toUpperCase()?.includes('POSTGRESQL')) {
     schemaLoading.value = true;
     try {
-      const schemas = await datasourceSchemas(dsId);
-      schemaList.value = schemas?.data || schemas || [];
+      const schemas = await datasourceSchemas(normalizedDsId);
+      schemaList.value = schemas || [];
     } catch (_) {}
     finally { schemaLoading.value = false; }
   }
 
   tableLoading.value = true;
   try {
-    const tables = await datasourceTables(dsId);
+    const tables = await datasourceTables(normalizedDsId);
     tableCatalog.value = tables || [];
   } catch (_) {
     tableCatalog.value = [];
@@ -382,8 +469,9 @@ async function onDsChange(dsId: number) {
 }
 
 // ---- Schema 切换，重新加载表列表 ----
-async function onSchemaChange(schema: string) {
-  bindSchema.value = schema;
+async function onSchemaChange(schema: string | number | undefined) {
+  const normalizedSchema = typeof schema === 'string' ? schema : '';
+  bindSchema.value = normalizedSchema;
   tableBindings.value = [];
   tableCatalog.value = [];
   selectedTables.value = [];
@@ -391,7 +479,7 @@ async function onSchemaChange(schema: string) {
   if (!bindDsId.value) return;
   tableLoading.value = true;
   try {
-    const tables = await datasourceTables(bindDsId.value, schema);
+    const tables = await datasourceTables(bindDsId.value, normalizedSchema);
     tableCatalog.value = tables || [];
   } catch (_) {
     tableCatalog.value = [];
@@ -404,6 +492,7 @@ async function onSchemaChange(schema: string) {
 // ---- 加载某张表的字段 ----
 async function loadTableColumns(tableName: string) {
   if (!bindDsId.value) return;
+  if (!hasAccessibleDatasource(bindDsId.value)) return;
   try {
     const cols = await datasourceColumns(bindDsId.value, tableName, bindSchema.value || undefined);
     const colNames = (cols || []).map((c: any) => c.columnName || c.name || c);
@@ -425,9 +514,9 @@ async function loadTableColumns(tableName: string) {
 }
 
 // ---- 选择表：加入 tableBindings 并加载字段 ----
-async function onTableSelectChange(selected: string[]) {
+async function onTableSelectChange(selected: string[] | string | number | undefined) {
   const prev = selectedTableSet.value;
-  const next = selected || [];
+  const next = Array.isArray(selected) ? selected : [];
   const nextSet = new Set(next);
   const added = next.filter((t) => !prev.has(t));
 
@@ -542,7 +631,7 @@ async function handleSubmit() {
     } else {
       const newId = await dqcPlanAdd(payload);
       if (typeof newId === 'number' || typeof newId === 'string') {
-        recordId.value = Number(newId);
+        recordId.value = newId;  // 直接赋值，不转换 number，避免精度丢失
       }
     }
 
@@ -572,8 +661,10 @@ async function handleSubmit() {
     message.success('保存成功');
     emit('reload');
     drawerApi.close();
-  } catch (error) {
+  } catch (error: any) {
     console.error(error);
+    // 重新抛出错误，让全局拦截器显示错误消息
+    throw error;
   } finally {
     drawerApi.lock(false);
     submitting.value = false;
@@ -581,7 +672,7 @@ async function handleSubmit() {
 }
 
 // ---- 同步规则绑定到后端 ----
-async function syncRuleBindings(planId: number) {
+async function syncRuleBindings(planId: string | number) {
   const rules: any[] = [];
   let order = 1;
   for (const tb of tableBindings.value) {
@@ -659,6 +750,7 @@ function handleClosed() {
   bindDsId.value = undefined;
   bindSchema.value = '';
   schemaList.value = [];
+  layerOptions.value = [];
   currentStep.value = 0;
 }
 
@@ -755,14 +847,18 @@ const dsLabel = computed(
   () => datasourceOptions.value.find((d) => d.value === bindDsId.value)?.label || '-',
 );
 
-function setAlertSuccess(checked: boolean) {
-  formValues.value.alertOnSuccess = checked ? '1' : '0';
+function setAlertSuccess(checked: unknown) {
+  formValues.value.alertOnSuccess = checked === true ? '1' : '0';
 }
-function setAlertFailure(checked: boolean) {
-  formValues.value.alertOnFailure = checked ? '1' : '0';
+function setAlertFailure(checked: unknown) {
+  formValues.value.alertOnFailure = checked === true ? '1' : '0';
 }
-function setAutoBlock(checked: boolean) {
-  formValues.value.autoBlock = checked ? '1' : '0';
+function setAutoBlock(checked: unknown) {
+  formValues.value.autoBlock = checked === true ? '1' : '0';
+}
+
+function getBoundRuleCount(tb: TableBinding, col: string) {
+  return tb.columnRules[col]?.length ?? 0;
 }
 
 // ---- 规则过滤 ----
@@ -823,11 +919,16 @@ const ruleFilterOptions = computed(() => {
               placeholder="描述该方案的作用范围和目标"
             />
           </Form.Item>
-          <Form.Item label="状态">
+          <Form.Item v-if="!recordId" label="状态">
             <Radio.Group v-model:value="formValues.status">
               <Radio value="DRAFT">草稿</Radio>
               <Radio value="PUBLISHED">已发布</Radio>
             </Radio.Group>
+          </Form.Item>
+          <Form.Item v-else label="状态">
+            <Tag :color="statusTagColor[formValues.status || ''] || 'default'">
+              {{ statusTextMap[formValues.status || ''] || formValues.status }}
+            </Tag>
           </Form.Item>
         </Form>
       </template>
@@ -843,7 +944,48 @@ const ruleFilterOptions = computed(() => {
             </span>
           </div>
 
-          <div class="grid grid-cols-2 gap-4">
+          <!-- 敏感等级范围 / 分层标签：一行一个 -->
+          <div class="flex flex-col gap-4">
+            <!-- 敏感等级过滤 -->
+            <Form.Item label="敏感等级过滤" class="mb-0">
+              <template #label>
+                <span>敏感等级过滤</span>
+                <Tooltip title="开启后，仅对该等级的敏感字段重点做规则绑定策略（需先在「数据安全 → 敏感字段识别」完成扫描）。不选表示不按等级过滤。">
+                  <QuestionCircleOutlined class="ml-1 text-gray-400 align-middle cursor-help" />
+                </Tooltip>
+              </template>
+              <Select
+                v-model:value="formValues.bindSensitivityLevel"
+                :options="sensitivityLevelOptions"
+                placeholder="不限制（可选）"
+                class="w-60 max-w-full"
+                allow-clear
+              />
+            </Form.Item>
+            <!-- 分层标签 -->
+            <Form.Item label="分层标签" class="mb-0">
+              <template #label>
+                <span>分层标签</span>
+                <Tooltip title="与「选哪张表」无关：仅用于方案列表里的展示/筛选（如 ODS、DWD）。若数据源配置里已有分层可留空。">
+                  <QuestionCircleOutlined class="ml-1 text-gray-400 align-middle cursor-help" />
+                </Tooltip>
+              </template>
+              <Select
+                v-model:value="formValues.layerCode"
+                :options="layerOptions"
+                placeholder="请选择分层（可选）"
+                class="w-60 max-w-full"
+                :loading="layerLoading"
+                show-search
+                allow-clear
+                :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
+              />
+            </Form.Item>
+          </div>
+
+          <!-- 第二行：数据源 -->
+          <div class="grid grid-cols-1 gap-4">
+            <!-- 数据源 -->
             <Form.Item label="数据源" required class="mb-0">
               <Select
                 v-model:value="bindDsId"
@@ -851,10 +993,14 @@ const ruleFilterOptions = computed(() => {
                 placeholder="请选择数据源"
                 show-search
                 :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
-                @change="onDsChange"
+                @change="(value) => onDsChange(value as string | number | undefined)"
               />
             </Form.Item>
-            <Form.Item v-if="isPostgresBind" label="Schema" required class="mb-0">
+          </div>
+
+          <!-- 第三行：Schema（仅 PostgreSQL） -->
+          <div v-if="isPostgresBind" class="grid grid-cols-1 gap-4">
+            <Form.Item label="Schema" required class="mb-0">
               <Select
                 v-model:value="bindSchema"
                 :options="schemaOptions"
@@ -863,60 +1009,12 @@ const ruleFilterOptions = computed(() => {
                 :loading="schemaLoading"
                 :filter-option="(input: string, option: any) => option.label.toLowerCase().includes(input.toLowerCase())"
                 :disabled="!bindDsId"
-                @change="onSchemaChange"
+                @change="(value) => onSchemaChange(value as string | number | undefined)"
               />
             </Form.Item>
-            <Form.Item v-else class="mb-0">
-              <template #label>
-                <span>分层标签</span>
-                <Tooltip
-                  title="与「选哪张表」无关：仅用于方案列表里的展示/筛选（如 ODS、DWD）。若数据源配置里已有分层可留空；非数仓分层场景也可不填。"
-                >
-                  <QuestionCircleOutlined class="ml-1 text-gray-400 align-middle cursor-help" />
-                </Tooltip>
-              </template>
-              <Input v-model:value="formValues.layerCode" placeholder="可选，如 ODS / DWD / DWS" />
-            </Form.Item>
           </div>
 
-          <!-- 敏感等级绑定（可选）：卡片式单选 +「不限制」 -->
-          <div class="sens-bind-panel">
-            <div class="sens-bind-panel-head">
-              <span class="sens-bind-panel-title">敏感等级过滤</span>
-              <Tag class="sens-bind-optional-tag">可选</Tag>
-            </div>
-            <p class="sens-bind-panel-desc">
-              开启后，仅对<strong>该等级</strong>的敏感字段重点做规则绑定策略（需先在「数据安全 → 敏感字段识别」完成扫描）。不选表示不按等级过滤。
-            </p>
-            <div class="sens-level-grid" role="radiogroup" aria-label="敏感等级">
-              <button
-                type="button"
-                class="sens-level-card sens-level-card-none"
-                :class="{ 'is-active': !formValues.bindSensitivityLevel }"
-                @click="formValues.bindSensitivityLevel = ''"
-              >
-                <span class="sens-level-card-title">不限制</span>
-                <span class="sens-level-card-hint">按已选表的全部字段列示</span>
-              </button>
-              <button
-                v-for="opt in sensitivityLevelOptions"
-                :key="opt.value"
-                type="button"
-                class="sens-level-card"
-                :class="{ 'is-active': formValues.bindSensitivityLevel === opt.value }"
-                :style="{
-                  '--sens-accent': sensitivityTextColor[opt.value],
-                  '--sens-bg': sensitivityBgColor[opt.value],
-                }"
-                @click="formValues.bindSensitivityLevel = opt.value"
-              >
-                <span class="sens-level-dot" :style="{ background: sensitivityTextColor[opt.value] }" />
-                <span class="sens-level-card-title">{{ opt.title }}</span>
-                <span class="sens-level-card-hint">{{ opt.hint }}</span>
-              </button>
-            </div>
-          </div>
-
+          <!-- 第四行：目标表（多选） -->
           <Form.Item label="目标表（多选）" required>
             <Select
               v-model:value="selectedTables"
@@ -929,10 +1027,10 @@ const ruleFilterOptions = computed(() => {
                   .toLowerCase()
                   .includes(input.toLowerCase())"
               :disabled="!bindDsId || (isPostgresBind && !bindSchema)"
-              :max-tag-count="8"
-              option-label-prop="label"
-              option-filter-prop="label"
-              @change="onTableSelectChange"
+              :max-tag-count="4"
+              :dropdown-match-select-width="false"
+              style="width: 500px"
+              @change="(value) => onTableSelectChange(value as string[] | string | number | undefined)"
             >
               <Select.Option
                 v-for="t in tableCatalog"
@@ -940,7 +1038,7 @@ const ruleFilterOptions = computed(() => {
                 :value="t"
                 :label="t"
               >
-                <div class="flex justify-between items-center gap-2">
+                <div class="flex justify-between items-center gap-2" style="max-width: 450px">
                   <span class="truncate">{{ t }}</span>
                   <Tag
                     v-if="selectedTables.includes(t) && tableBindings.find((tb) => tb.tableName === t)"
@@ -997,7 +1095,7 @@ const ruleFilterOptions = computed(() => {
             </Table.Column>
             <Table.Column title="表名" dataIndex="tableName" width="200" fixed="left" ellipsis />
             <Table.Column title="字段名" dataIndex="columnName" width="160" ellipsis />
-            <Table.Column title="已绑定规则" min-width="280">
+            <Table.Column title="已绑定规则" :min-width="280">
               <template #default="{ record }">
                 <Space wrap size="small">
                   <Tag
@@ -1184,8 +1282,8 @@ const ruleFilterOptions = computed(() => {
                 <code class="plan-code-inline">{{ formValues.planCode || '—' }}</code>
               </Descriptions.Item>
               <Descriptions.Item label="状态">
-                <Tag :color="formValues.status === 'PUBLISHED' ? 'success' : 'default'">
-                  {{ formValues.status === 'PUBLISHED' ? '已发布' : '草稿' }}
+                <Tag :color="statusTagColor[formValues.status || ''] || 'default'">
+                  {{ statusTextMap[formValues.status || ''] || formValues.status || '—' }}
                 </Tag>
               </Descriptions.Item>
               <Descriptions.Item label="数据源（实例）">
@@ -1270,11 +1368,11 @@ const ruleFilterOptions = computed(() => {
                     v-for="col in tb.columns"
                     :key="col"
                     size="small"
-                    :color="(tb.columnRules[col]?.length || 0) > 0 ? 'green' : 'default'"
+                    :color="getBoundRuleCount(tb, col) > 0 ? 'green' : 'default'"
                   >
                     {{ col }}
-                    <span v-if="tb.columnRules[col]?.length > 0" class="ml-1 text-xs">
-                      ({{ tb.columnRules[col].length }})
+                    <span v-if="getBoundRuleCount(tb, col) > 0" class="ml-1 text-xs">
+                      ({{ getBoundRuleCount(tb, col) }})
                     </span>
                   </Tag>
                 </div>
@@ -1289,7 +1387,7 @@ const ruleFilterOptions = computed(() => {
     <Modal
       v-model:open="ruleSelectorVisible"
       title="绑定质检规则"
-      width="900px"
+      width="1100px"
       ok-text="确认绑定"
       cancel-text="取消"
       @ok="confirmRuleBinding"
@@ -1314,27 +1412,37 @@ const ruleFilterOptions = computed(() => {
       <Table
         :loading="ruleSelectorLoading"
         :data-source="ruleFilterOptions"
-        :pagination="{ pageSize: 10, showSizeChanger: false, showTotal: (total: number) => `共 ${total} 条` }"
+        :pagination="{ pageSize: 10, showSizeChanger: true, showTotal: (total: number) => `共 ${total} 条` }"
         :row-selection="{
           selectedRowKeys: selectedRuleIds,
           onChange: (keys: any[]) => { selectedRuleIds = keys; },
         }"
         :row-key="(r: any) => r.id"
-        size="small"
-        :scroll="{ y: 400 }"
+        size="middle"
+        :scroll="{ x: 1100, y: 500 }"
       >
-        <Table.Column title="规则名称" dataIndex="ruleName" width="200" ellipsis />
-        <Table.Column title="规则编码" dataIndex="ruleCode" width="150" ellipsis />
-        <Table.Column title="规则类型" dataIndex="ruleType" width="100" />
-        <Table.Column title="适用级别" dataIndex="applyLevel" width="90" />
-        <Table.Column title="告警级别" dataIndex="errorLevel" width="90">
+        <Table.Column title="规则名称" dataIndex="ruleName" width="180" ellipsis />
+        <Table.Column title="规则编码" dataIndex="ruleCode" width="140" ellipsis />
+        <Table.Column title="规则类型" dataIndex="ruleType" width="100" align="center" />
+        <Table.Column title="适用级别" dataIndex="applyLevel" width="100" align="center">
           <template #default="{ text }">
-            <Tag v-if="text" :color="errorLevelColor[text]">{{ text }}</Tag>
+            <Tag v-if="text" :color="applyLevelColor[text] || 'default'">
+              {{ applyLevelOptions.find((o) => o.value === text)?.label || text }}
+            </Tag>
           </template>
         </Table.Column>
-        <Table.Column title="规则强度" dataIndex="ruleStrength" width="90">
+        <Table.Column title="告警级别" dataIndex="errorLevel" width="100" align="center">
           <template #default="{ text }">
-            <Tag v-if="text" :color="ruleStrengthColor[text]">{{ text }}</Tag>
+            <Tag v-if="text" :color="errorLevelColor[text]">
+              {{ errorLevelOptions.find((o) => o.value === text)?.label || text }}
+            </Tag>
+          </template>
+        </Table.Column>
+        <Table.Column title="规则强度" dataIndex="ruleStrength" width="100" align="center">
+          <template #default="{ text }">
+            <Tag v-if="text" :color="ruleStrengthColor[text]">
+              {{ ruleStrengthOptions.find((o) => o.value === text)?.label || text }}
+            </Tag>
           </template>
         </Table.Column>
         <Table.Column title="描述" dataIndex="ruleDesc" ellipsis />
@@ -1529,113 +1637,6 @@ const ruleFilterOptions = computed(() => {
   padding-right: 4px;
 }
 .text-primary {
-  color: #1677ff;
-}
-
-/* 敏感等级：面板 + 2×2 卡片，焦点环可键盘操作 */
-.sens-bind-panel {
-  border: 1px solid #f0f0f0;
-  border-radius: 12px;
-  padding: 16px 18px;
-  background: linear-gradient(180deg, #fafafa 0%, #fff 48px);
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
-}
-.sens-bind-panel-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 8px;
-}
-.sens-bind-panel-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f1f1f;
-}
-.sens-bind-optional-tag {
-  margin: 0;
-  font-size: 12px;
-  line-height: 1.4;
-  border-radius: 4px;
-  color: #595959;
-  background: #f5f5f5;
-  border: none;
-}
-.sens-bind-panel-desc {
-  font-size: 12px;
-  color: #8c8c8c;
-  line-height: 1.55;
-  margin: 0 0 14px;
-  max-width: 52rem;
-}
-.sens-level-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
-}
-@media (min-width: 900px) {
-  .sens-level-grid {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-  }
-}
-.sens-level-card {
-  position: relative;
-  text-align: left;
-  border: 1px solid #e8e8e8;
-  border-radius: 10px;
-  padding: 12px 12px 12px 14px;
-  background: #fff;
-  cursor: pointer;
-  transition:
-    border-color 0.2s ease,
-    box-shadow 0.2s ease,
-    background 0.2s ease;
-  min-height: 72px;
-  display: flex;
-  flex-direction: column;
-  justify-content: center;
-  gap: 2px;
-}
-.sens-level-card:hover {
-  border-color: #91caff;
-  box-shadow: 0 2px 8px rgba(22, 119, 255, 0.08);
-}
-.sens-level-card:focus-visible {
-  outline: none;
-  box-shadow: 0 0 0 2px #fff, 0 0 0 4px #1677ff;
-}
-.sens-level-card.is-active {
-  border-color: var(--sens-accent, #1677ff);
-  background: var(--sens-bg, #e6f4ff);
-  box-shadow: 0 0 0 1px var(--sens-accent, #1677ff);
-}
-.sens-level-card-none.is-active {
-  border-color: #1677ff;
-  background: #e6f4ff;
-  box-shadow: 0 0 0 1px #1677ff;
-}
-.sens-level-dot {
-  position: absolute;
-  left: 12px;
-  top: 14px;
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-}
-.sens-level-card:not(.sens-level-card-none) {
-  padding-left: 28px;
-}
-.sens-level-card-title {
-  font-size: 14px;
-  font-weight: 600;
-  color: #1f1f1f;
-  line-height: 1.3;
-}
-.sens-level-card-hint {
-  font-size: 12px;
-  color: #8c8c8c;
-  line-height: 1.35;
-}
-.sens-level-card-none .sens-level-card-title {
   color: #1677ff;
 }
 </style>

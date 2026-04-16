@@ -1,4 +1,5 @@
 import type { DqcExecution, DqcExecutionDetail } from '#/api/metadata/model';
+import type { DqcQualityScore } from '#/api/metadata/model';
 import type { ID, PageQuery, PageResult } from '#/api/common';
 import { requestClient } from '#/api/request';
 
@@ -9,6 +10,7 @@ enum Api {
   stop = '/system/metadata/dqc/execution/{id}/stop',
   rerun = '/system/metadata/dqc/execution/{id}/rerun',
   detail = '/system/metadata/dqc/execution/detail/{executionId}',
+  scoreTrend = '/system/metadata/dqc/score/trend',
 }
 
 /** 查询DQC执行记录列表 */
@@ -36,4 +38,9 @@ export function dqcExecutionDetails(executionId: ID) {
   return requestClient.get<DqcExecutionDetail[]>(
     Api.detail.replace('{executionId}', String(executionId))
   );
+}
+
+/** 查询评分趋势（驾驶舱用） */
+export function dqcScoreTrend(params?: { days?: number }) {
+  return requestClient.get<DqcQualityScore[]>(Api.scoreTrend, { params });
 }

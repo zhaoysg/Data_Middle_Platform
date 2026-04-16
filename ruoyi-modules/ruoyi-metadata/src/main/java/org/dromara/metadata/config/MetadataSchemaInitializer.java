@@ -13,6 +13,7 @@ import org.springframework.jdbc.datasource.init.ScriptUtils;
 import org.springframework.stereotype.Component;
 
 import javax.sql.DataSource;
+import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.sql.Connection;
 import java.sql.DatabaseMetaData;
@@ -25,6 +26,7 @@ import java.time.Instant;
 import java.util.Arrays;
 import java.util.Comparator;
 import java.util.Locale;
+import java.util.regex.Pattern;
 
 /**
  * Initializes metadata schema objects on the bigdata datasource.
@@ -46,6 +48,8 @@ public class MetadataSchemaInitializer implements ApplicationRunner {
         "SELECT COUNT(1) FROM `" + HISTORY_TABLE_NAME + "` WHERE script_name = ?";
     private static final String HISTORY_INSERT_SQL =
         "INSERT INTO `" + HISTORY_TABLE_NAME + "` (script_name, executed_at) VALUES (?, ?)";
+    private static final Pattern BLOCK_COMMENT_PATTERN = Pattern.compile("/\\*.*?\\*/", Pattern.DOTALL);
+    private static final Pattern LINE_COMMENT_PATTERN = Pattern.compile("(?m)^\\s*(--|#).*$");
 
     private final DataSource dataSource;
     private final ResourcePatternResolver resourceResolver = new PathMatchingResourcePatternResolver();
@@ -78,6 +82,10 @@ public class MetadataSchemaInitializer implements ApplicationRunner {
                     log.info("Metadata init script already applied, skip: {}", scriptName);
                     continue;
                 }
+                if (!hasExecutableSql(script)) {
+                    log.info("Metadata init script contains no executable SQL, skip: {}", scriptName);
+                    continue;
+                }
                 log.info("Executing metadata init script: {}", scriptName);
                 ScriptUtils.executeSqlScript(connection, new EncodedResource(script, StandardCharsets.UTF_8));
                 markScriptExecuted(connection, scriptName);
@@ -91,6 +99,14 @@ public class MetadataSchemaInitializer implements ApplicationRunner {
     static String resolveScriptName(Resource script) {
         String filename = script.getFilename();
         return filename != null ? filename : script.getDescription();
+    }
+
+    static boolean hasExecutableSql(Resource script) throws IOException {
+        String content = new String(script.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+        String normalized = BLOCK_COMMENT_PATTERN.matcher(content).replaceAll("");
+        normalized = LINE_COMMENT_PATTERN.matcher(normalized).replaceAll("");
+        normalized = normalized.replace(";", "").trim();
+        return !normalized.isEmpty();
     }
 
     static void ensureHistoryTable(Connection connection) throws SQLException {

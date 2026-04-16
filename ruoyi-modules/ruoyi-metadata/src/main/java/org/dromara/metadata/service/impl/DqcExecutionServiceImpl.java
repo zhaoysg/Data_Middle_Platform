@@ -1,6 +1,8 @@
 package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -26,7 +28,9 @@ import org.dromara.metadata.mapper.DqcExecutionDetailMapper;
 import org.dromara.metadata.mapper.DqcExecutionMapper;
 import org.dromara.metadata.mapper.DqcPlanMapper;
 import org.dromara.metadata.mapper.DqcPlanRuleMapper;
+import org.dromara.metadata.mapper.DqcQualityScoreMapper;
 import org.dromara.metadata.mapper.DqcRuleDefMapper;
+import org.dromara.metadata.domain.DqcQualityScore;
 import org.dromara.metadata.mapper.MetadataColumnMapper;
 import org.dromara.metadata.mapper.MetadataTableMapper;
 import org.dromara.metadata.service.IDqcExecutionService;
@@ -35,11 +39,12 @@ import org.dromara.metadata.support.DatasourceHelper;
 import org.redisson.api.RLock;
 import org.redisson.api.RedissonClient;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
+import java.math.RoundingMode;
 import java.time.Duration;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -64,6 +69,7 @@ import java.util.function.Supplier;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DqcExecutionServiceImpl implements IDqcExecutionService {
 
     private final DqcExecutionMapper executionMapper;
@@ -76,6 +82,7 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
     private final IDqcQualityScoreService qualityScoreService;
     private final MetadataTableMapper metadataTableMapper;
     private final MetadataColumnMapper metadataColumnMapper;
+    private final DqcQualityScoreMapper qualityScoreMapper;
 
     /** Redis 闂傚倸鍊搁崐椋庣矆娓氣偓婵￠潧螣閼测晝鐒兼繛杈剧秬椤鈻嶉悩缁樼厽婵☆垰鍚嬮弳鈺冪棯閸欍儳鐭欓柡灞界Х椤т線鏌涢幘璺烘灈鐎殿噮鍋勯濂稿椽娴ｈ銆冮梻浣筋嚙鐎涒晝绮╃粚宄筫c:lock:{planId} */
     private static final String LOCK_KEY_PREFIX = "dqcexec:lock:";
@@ -101,21 +108,71 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         DqcExecutionVo vo = executionMapper.selectVoById(id);
         if (vo != null) {
             formatVo(vo);
+            enrichDimensionScores(vo);
         }
         return vo;
     }
 
+    private void enrichDimensionScores(DqcExecutionVo vo) {
+        if (vo.getId() == null) return;
+        List<DqcQualityScore> scores = qualityScoreMapper.selectVoList(
+            Wrappers.<DqcQualityScore>lambdaQuery()
+                .eq(DqcQualityScore::getExecutionId, vo.getId())
+        );
+        if (scores.isEmpty()) return;
+
+        // 聚合多表评分：取各维度的平均值
+        BigDecimal[] dimSums = {BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO, BigDecimal.ZERO};
+        int[] dimCounts = {0, 0, 0, 0, 0, 0};
+        for (DqcQualityScore score : scores) {
+            aggDim(score.getCompletenessScore(), dimSums, 0, dimCounts);
+            aggDim(score.getUniquenessScore(), dimSums, 1, dimCounts);
+            aggDim(score.getAccuracyScore(), dimSums, 2, dimCounts);
+            aggDim(score.getConsistencyScore(), dimSums, 3, dimCounts);
+            aggDim(score.getTimelinessScore(), dimSums, 4, dimCounts);
+            aggDim(score.getValidityScore(), dimSums, 5, dimCounts);
+        }
+        vo.setCompletenessScore(avg(dimSums[0], dimCounts[0]));
+        vo.setUniquenessScore(avg(dimSums[1], dimCounts[1]));
+        vo.setAccuracyScore(avg(dimSums[2], dimCounts[2]));
+        vo.setConsistencyScore(avg(dimSums[3], dimCounts[3]));
+        vo.setTimelinessScore(avg(dimSums[4], dimCounts[4]));
+        vo.setValidityScore(avg(dimSums[5], dimCounts[5]));
+    }
+
+    private void aggDim(BigDecimal val, BigDecimal[] sums, int idx, int[] counts) {
+        if (val != null) {
+            sums[idx] = sums[idx].add(val);
+            counts[idx]++;
+        }
+    }
+
+    private BigDecimal avg(BigDecimal sum, int count) {
+        if (count == 0) return null;
+        return sum.divide(BigDecimal.valueOf(count), 2, RoundingMode.HALF_UP);
+    }
+
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DS("bigdata")
+    @DSTransactional
     public DqcExecution executePlan(Long planId, String triggerType, Long triggerUser) {
+        log.info("========== 开始执行质检方案 ==========");
+        log.info("planId={}, triggerType={}, triggerUser={}", planId, triggerType, triggerUser);
         RLock lock = getLock(planId);
         if (!tryLock(lock)) {
-            throw new ServiceException("The plan is already running.");
+            log.warn("方案执行被拒绝：方案正在运行中, planId={}", planId);
+            throw new ServiceException("方案正在运行中，请稍后再试");
         }
 
         DqcExecution execution = null;
         try {
-            return doExecutePlan(planId, triggerType, triggerUser);
+            execution = doExecutePlan(planId, triggerType, triggerUser);
+            log.info("========== 方案执行完成 ==========");
+            log.info("executionId={}, executionNo={}, status={}", execution.getId(), execution.getExecutionNo(), execution.getStatus());
+            return execution;
+        } catch (Exception e) {
+            log.error("========== 方案执行异常 ==========", e);
+            throw e;
         } finally {
             unlock(lock);
         }
@@ -147,11 +204,7 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         RedisUtils.setCacheObject(cancelKey, "0", Duration.ofHours(1));
 
         // 闂傚倸鍊风粈渚€骞栭銈嗗仏妞ゆ劧绠戠壕鍧楁煙缂併垹娅橀柡浣割儐娣囧﹪濡堕崨顓熸缂佺偓鍎抽妶鎼佸蓟閻旇　鍋撳☉娆樼劷缂佺姵锕㈤弻锟犲幢閺囩偛绁梺璇″枛閸㈡煡鍩㈡惔銈囩杸闁瑰灝鍟╅幃锝夋⒒?
-        var planRules = planRuleMapper.selectList(
-            Wrappers.<DqcPlanRule>lambdaQuery()
-                .eq(DqcPlanRule::getPlanId, planId)
-                .orderByAsc(DqcPlanRule::getSortOrder)
-        );
+        var planRules = planRuleMapper.selectCompatibleByPlanId(planId);
 
         List<Long> ruleIds = planRules.stream().map(DqcPlanRule::getRuleId).toList();
 
@@ -169,24 +222,37 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         }
 
         List<DqcRuleDef> rules = ruleDefMapper.selectCompatibleBatchIds(ruleIds);
-        execution.setTotalRules(rules.size());
+        Map<Long, DqcRuleDef> ruleMap = new HashMap<>();
+        for (DqcRuleDef rule : rules) {
+            ruleMap.put(rule.getId(), rule);
+        }
+        execution.setTotalRules(planRules.size());
 
         int passed = 0, failed = 0, blocked = 0;
         Long execId = execution.getId();
 
-        for (DqcRuleDef rule : rules) {
+        for (DqcPlanRule planRule : planRules) {
+            DqcRuleDef rule = ruleMap.get(planRule.getRuleId());
+            if (rule == null) {
+                log.warn("方案绑定的规则不存在或不可用: planId={}, ruleId={}", planId, planRule.getRuleId());
+                failed++;
+                continue;
+            }
             // 婵犵數濮甸鏍闯椤栨粌绶ら柣锝呮湰瀹曟煡鏌熸潏鎯х槣闁轰礁鍟撮弻銈吤圭€ｎ偅鐝曢梺鍝ュТ濡繈寮诲☉銏犲嵆闁靛鍎扮花濠氭⒑鐠囪尙绠抽柛鐘崇墵瀵鎮㈤搹鍦暥濠电偞鍨惰摫闁挎稑绉归弻锟犲焵椤掍胶顩烽悗锝庡亞閸橀亶姊虹憴鍕姢缁剧虎鍘介悧搴繆閻愵亜鈧垿宕曢柆宥呯疇婵☆垯璀﹂崵鏇炩攽閻樺疇澹橀崬顖炴⒑閹稿孩鐓ョ憸鑸姂閺佸啴宕掑☉姘箞婵犳鍠楅敋濠⒀傜矙閹箖鎼归鐘辩盎濡炪倖鍔﹂崜娑㈡偩閻㈢鍋撶憴鍕┛缂傚秳绀侀锝嗙鐎ｎ€晜銇?
             if (isCancelled(execId)) {
                 log.info("闂傚倸鍊风粈浣革耿闁秵鍋￠柟鎯版楠炪垽鏌嶉崫鍕偓褰掑级閹间焦鐓熼幖娣€ゅ鎰版煟閳╁啯绀堝ù婊勬倐椤㈡棃宕奸鍌溾棨闂備焦瀵уú鏍磹閹间焦鍎楁俊銈呮噺閻撴稓鈧箍鍎遍崯顐ｄ繆閸ф鐤? executionId={}, ruleId={}", execId, rule.getId());
                 break;
             }
 
-            DqcExecutionDetail detail = createExecutionDetail(execution, rule);
+            DqcExecutionDetail detail = createExecutionDetail(execution, rule, plan, planRule);
 
             try {
                 // ========== 闂傚倸鍊烽懗鍫曗€﹂崼銏″床闁圭増婢橀悿顔姐亜閺嶎偄浠滄慨瑙勭叀閺岋綁寮崒姘粯缂備胶濮村鍫曞Φ閸曨垰鍗虫俊銈傚亾濞存粓绠栧鍝勭暦閸ャ劌娈岀紓浣割槺閹虫捇鎮惧畡鎵虫斀閻庯急鈧崑鎾绘晝閸屾氨顔婇梺鍝勫暙閸婅鐣烽崼鏇熲拻闁稿本鐟х拹浼存煕鐎ｎ亝鍣虹紒宀勪憾閹煎湱鎲撮崟顐㈢哎?tableId 闂傚倸鍊风粈渚€骞栭锔绘晞闁告侗鍨崑鎾愁潩閻撳骸顫紓?MetadataContext ==========
-                MetadataContext context = buildMetadataContext(rule);
+                MetadataContext context = buildMetadataContext(rule, plan, planRule);
+                log.info("=== 准备获取数据源适配器 ===");
+                log.info("context.getDsId()={}", context.getDsId());
                 DataSourceAdapter adapter = datasourceHelper.getAdapter(context.getDsId());
+                log.info("数据源适配器获取成功: {}", adapter);
 
                 RuleExecutor executor = executorFactory.getExecutor(rule.getRuleType());
                 if (executor == null) {
@@ -271,21 +337,41 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
      * 闂傚倸鍊搁崐椋庢閿熺姴纾婚柛娑卞枤閳瑰秹鏌ц箛姘兼綈鐎?rule 闂?tableId闂傚倸鍊风欢姘焽瑜嶈灋闁哄啫鐗嗙粻鎺楁煟閻樻鐓秛mnId闂傚倸鍊风欢姘焽瑜嶈灋闁哄啫鐗嗙粻鎺楁煟閻樼偣鈧檵areTableId闂傚倸鍊风欢姘焽瑜嶈灋闁哄啫鐗嗙粻鎺楁煟閻樼偣鈧檵areColumnId
      * 闂傚倸鍊风粈渚€骞栭銈嗗仏妞ゆ劧绠戠壕鍧楁煙缂併垹娅橀柡浣割儐娣囧﹪濡堕崨顔兼缂備讲鍋撻柛宀€鍋為悡鏇㈡煙閼割剙濡芥繛鍛缁绘盯宕煎┑鍫濈厽闂佸搫鐬奸崰鎾诲箯閻樿鐏抽柧蹇ｅ亞娴犲本淇婇妶鍥ラ柛瀣〒閹广垹螣閾忚娈鹃梺鎸庣箓椤︻垶宕橀埀顒勬偡濠婂啰绠荤€殿喛鍩栫粋鎺斺偓锝庡亐閹峰姊洪崨濠冨闁稿鎳樺畷鎶芥嚍閵壯咁啎闂佸壊鍋嗛崰搴ㄦ倶閳哄懏鐓欐い鏃囶嚙瀹撳棗鈹戦埄鍐╁€愬┑锛勫厴閺佸啴鍩€椤掑嫬鐒垫い鎺嶇閳绘洟鏌＄仦鐐鐎规洟浜跺鎾偑閳ь剙危椤曗偓濮婃椽鎮滈埡渚囨綒闂佸憡鍔х徊楣冩倶娓氣偓濮婂宕掑鍗烆杸缂備礁顑嗙敮鈥崇暦閹邦剛鏆﹂柛銉㈡櫇閿涙粌鈹戦悙鏉戠仸闁挎洍鏅涘嵄鐎瑰嫭澧ユ惔銊ョ倞鐟滄繈鐓渚囨?
      */
-    private MetadataContext buildMetadataContext(DqcRuleDef rule) {
+    private MetadataContext buildMetadataContext(DqcRuleDef rule, DqcPlan plan, DqcPlanRule planRule) {
         String tableName = null;
         String columnName = null;
         String compareTableName = null;
         String compareColumnName = null;
-        Long dsId = null;
+        Long planDsId = resolveDsIdFromPlan(plan);
+        Long dsId = shouldPreferPlanBinding(planRule) ? planDsId : null;
         String dsCode = null;
 
+        if (planRule != null) {
+            if (StringUtils.isNotBlank(planRule.getTargetTable())) {
+                tableName = planRule.getTargetTable();
+            }
+            if (StringUtils.isNotBlank(planRule.getTargetColumn())) {
+                columnName = planRule.getTargetColumn();
+            }
+        }
+
         // 闂傚倸鍊风粈渚€骞栭銈嗗仏妞ゆ劧绠戠壕鍧楁煙缂併垹娅橀柡浣割儐娣囧﹪濡堕崨顔兼闂佺楠哥€涒晠濡甸崟顖氱睄闁稿本绋掗悵顏堟⒑閹肩偛濡奸柕鍫熸倐楠炲啰鎹勭悰鈩冾潔闂佸搫璇為崘鍓р偓鎶芥⒒娴ｅ憡鍟為拑閬嶆煙閻熺増鎼愭い鏇秮椤㈡洟鏁傞挊澶夌綍闂備礁澹婇崑鍛崲閸曨垰围?
+        log.info("=== buildMetadataContext 开始 ===");
+        log.info("ruleId={}, ruleName={}, rule.tableId={}", rule.getId(), rule.getRuleName(), rule.getTableId());
+        log.info("planId={}, plan.bindValue={}", plan.getId(), plan.getBindValue());
+
+        // 从规则关联的表获取 dsId
         if (rule.getTableId() != null) {
             MetadataTable table = metadataTableMapper.selectById(rule.getTableId());
             if (table != null) {
-                tableName = table.getTableName();
-                dsId = table.getDsId();
-                dsCode = table.getDsCode();
+                if (StringUtils.isBlank(tableName)) {
+                    tableName = table.getTableName();
+                }
+                if (dsId == null) {
+                    dsId = table.getDsId();
+                    dsCode = table.getDsCode();
+                    log.info("从规则关联表获取: dsId={}", dsId);
+                }
             }
         }
 
@@ -293,7 +379,9 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         if (rule.getColumnId() != null) {
             MetadataColumn column = metadataColumnMapper.selectById(rule.getColumnId());
             if (column != null) {
-                columnName = column.getColumnName();
+                if (StringUtils.isBlank(columnName)) {
+                    columnName = column.getColumnName();
+                }
             }
         }
 
@@ -313,13 +401,21 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
             }
         }
 
+        // 当规则的 tableId 为空时，从方案的 bindValue 中解析 dsId
+        log.info("检查是否需要从方案获取 dsId: 当前 dsId={}", dsId);
+        if (dsId == null && planDsId != null) {
+            dsId = planDsId;
+            log.info("成功从方案配置中获取 dsId: {}, planId={}", dsId, plan.getId());
+        }
+        log.info("=== buildMetadataContext 结束: dsId={}, tableName={} ===", dsId, tableName);
+
         return new MetadataContext(tableName, columnName, compareTableName, compareColumnName, dsId, dsCode);
     }
 
     /**
      * 闂傚倸鍊风粈渚€骞夐敍鍕殰婵°倕鍟伴惌娆撴煙鐎电啸缁惧彞绮欓弻鐔煎箲閹伴潧娈紓浣哄О閸庢娊骞夐幖浣哥闁挎棁銆€閸嬫挻绗熼埀顒勭嵁鐎ｎ喗鏅濋柍褜鍓熷畷锝嗙節閸パ咁啇闁哄鐗嗘晶浠嬪箖婵傚憡鐓?
      */
-    private DqcExecutionDetail createExecutionDetail(DqcExecution execution, DqcRuleDef rule) {
+    private DqcExecutionDetail createExecutionDetail(DqcExecution execution, DqcRuleDef rule, DqcPlan plan, DqcPlanRule planRule) {
         DqcExecutionDetail detail = new DqcExecutionDetail();
         detail.setExecutionId(execution.getId());
         detail.setRuleId(rule.getId());
@@ -327,16 +423,31 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         detail.setRuleCode(rule.getRuleCode());
         detail.setRuleType(rule.getRuleType());
         detail.setDimension(rule.getDimensions());
-        detail.setTargetDsId(rule.getTableId() != null ? metadataTableMapper.selectById(rule.getTableId()).getDsId() : null);
+        // 设置目标数据源ID
+        Long targetDsId = shouldPreferPlanBinding(planRule) ? resolveDsIdFromPlan(plan) : null;
+        if (targetDsId == null && rule.getTableId() != null) {
+            MetadataTable table = metadataTableMapper.selectById(rule.getTableId());
+            if (table != null) {
+                targetDsId = table.getDsId();
+            }
+        }
+        if (targetDsId == null) {
+            targetDsId = resolveDsIdFromPlan(plan);
+        }
+        detail.setTargetDsId(targetDsId);
 
         // 闂傚倸鍊搁崐椋庢閿熺姴纾婚柛娑卞枤閳瑰秹鏌ц箛姘兼綈鐎规洘鐓￠弻娑㈠箛闂堟稒鐏堢紓浣插亾闁稿瞼鍋為悡鏇㈡煙閼割剙濡芥繛鍛缁绘盯宕煎┑鍫濈厽闂佸搫鐬奸崰鎾诲箯閻樿鐏抽柧蹇ｅ亞娴犲本淇婇妶鍥ラ柛瀣〒閹广垹螣閾忚娈鹃梺鎸庣箓椤︻垶宕橀埀顒€顪冮妶鍡楃伌闁轰緡鍣ｅ畷鎴﹀箻鐠囪尙顦ㄥ銈嗘婢瑰牐顤傞梺璇查缁犲秹宕曢柆宥呯疇闊洦娲嶉崑鎾愁潩椤撶姴寮ㄩ梺璇″枟椤ㄥ懘鍩ユ径濞炬瀻婵☆垵宕甸弳锔戒繆閻愵亜鈧牠寮婚妸鈺傚剹闁稿本姘ㄩ弳?
-        if (rule.getTableId() != null) {
+        if (planRule != null && StringUtils.isNotBlank(planRule.getTargetTable())) {
+            detail.setTargetTable(planRule.getTargetTable());
+        } else if (rule.getTableId() != null) {
             MetadataTable table = metadataTableMapper.selectById(rule.getTableId());
             if (table != null) {
                 detail.setTargetTable(table.getTableName());
             }
         }
-        if (rule.getColumnId() != null) {
+        if (planRule != null && StringUtils.isNotBlank(planRule.getTargetColumn())) {
+            detail.setTargetColumn(planRule.getTargetColumn());
+        } else if (rule.getColumnId() != null) {
             MetadataColumn column = metadataColumnMapper.selectById(rule.getColumnId());
             if (column != null) {
                 detail.setTargetColumn(column.getColumnName());
@@ -345,6 +456,31 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
 
         detail.setExecuteTime(LocalDateTime.now());
         return detail;
+    }
+
+    /**
+     * 从方案配置中解析数据源ID
+     */
+    private Long resolveDsIdFromPlan(DqcPlan plan) {
+        if (plan == null || StringUtils.isBlank(plan.getBindValue())) {
+            return null;
+        }
+        try {
+            cn.hutool.json.JSONObject bindJson = new cn.hutool.json.JSONObject(plan.getBindValue());
+            String dsId = bindJson.getStr("dsId");
+            if (StringUtils.isNotBlank(dsId)) {
+                return Long.parseLong(dsId);
+            }
+        } catch (Exception e) {
+            log.warn("解析方案 bindValue 获取 dsId 失败: planId={}, error={}", plan.getId(), e.getMessage());
+        }
+        return null;
+    }
+
+    private boolean shouldPreferPlanBinding(DqcPlanRule planRule) {
+        return planRule != null
+            && (StringUtils.isNotBlank(planRule.getTargetTable())
+            || StringUtils.isNotBlank(planRule.getTargetColumn()));
     }
 
     @Override
@@ -454,6 +590,12 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
     /**
      * 闂傚倸鍊风粈渚€骞栭銈囩煋闁割偅娲栭崒銊ф喐韫囨拹锝夊箛閻楀牊娅㈤梺缁橆焾鐏忔瑩藝闁秵鈷戦柛婵嗗琚梺鍛婃煥閻倿宕哄☉銏犵睄闁割偆鍠庢禒鈺佲攽閻愭潙鐏︽い顓炴喘閹偤鏌ㄧ€ｃ劋绨婚梺鍝勫€圭€笛呯矚閸ф鐓忛柛銉ｅ妼婵秶鈧鍠曢崡鍐差嚕?
      */
+    private static final Map<String, String> TRIGGER_TYPE_TEXT = Map.of(
+        "MANUAL", "手动触发",
+        "SCHEDULE", "定时触发",
+        "API", "API触发"
+    );
+
     private void formatVo(DqcExecutionVo vo) {
         if (vo == null) return;
         if ("RUNNING".equals(vo.getStatus())) {
@@ -467,6 +609,7 @@ public class DqcExecutionServiceImpl implements IDqcExecutionService {
         } else if ("STOPPED".equals(vo.getStatus())) {
             vo.setStatusText("STOPPED");
         }
+        vo.setTriggerTypeText(TRIGGER_TYPE_TEXT.getOrDefault(vo.getTriggerType(), vo.getTriggerType()));
     }
 
     /**

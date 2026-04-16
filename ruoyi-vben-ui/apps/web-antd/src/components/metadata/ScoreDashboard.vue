@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { Pie, Line } from '@ant-design/charts';
+import { computed, onMounted, ref, watch } from 'vue';
 import { Card, Row, Col, Statistic } from 'ant-design-vue';
+import type { EchartsUIType } from '@vben/plugins/echarts';
+import { EchartsUI, useEcharts } from '@vben/plugins/echarts';
 
 interface ScoreData {
   checkDate?: string;
@@ -25,6 +26,11 @@ interface Props {
 
 const props = defineProps<Props>();
 
+const pieRef = ref<EchartsUIType>();
+const trendRef = ref<EchartsUIType>();
+const { renderEcharts: renderPie, updateData: updatePie } = useEcharts(pieRef);
+const { renderEcharts: renderTrend, updateData: updateTrend } = useEcharts(trendRef);
+
 const scoreChartData = computed(() => {
   if (!props.latestScore) return [];
   const s = props.latestScore;
@@ -38,37 +44,87 @@ const scoreChartData = computed(() => {
   ];
 });
 
-const pieConfig = computed(() => ({
-  data: scoreChartData.value,
-  angleField: 'score',
-  colorField: 'dimension',
-  radius: 0.8,
-  innerRadius: 0.65,
-  label: { text: 'score', style: { fontWeight: 400 } },
-  legend: { color: { title: false, position: 'right' } },
-  statistic: {
-    title: { content: '综合得分', style: { fontSize: 14 } },
-    content: {
-      content: String(props.latestScore?.overallScore || 0),
-      style: { fontSize: 28, fontWeight: 'bold' },
+const pieOption = computed(() => {
+  const data = scoreChartData.value;
+  const overall = props.latestScore?.overallScore || 0;
+  return {
+    tooltip: { trigger: 'item', formatter: '{b}: {c}分' },
+    series: [
+      {
+        type: 'pie',
+        radius: ['52%', '78%'],
+        center: ['50%', '42%'],
+        avoidLabelOverlap: false,
+        label: { show: false },
+        labelLine: { show: false },
+        data: data.map((d) => ({ name: d.dimension, value: d.score })),
+        color: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'],
+        itemStyle: { borderRadius: 6, borderColor: '#fff', borderWidth: 2 },
+      },
+    ],
+    title: {
+      text: overall.toString(),
+      subtext: '综合得分',
+      left: 'center',
+      top: '36%',
+      textStyle: { fontSize: 28, fontWeight: 700, color: '#334155' },
+      subtextStyle: { fontSize: 13, color: '#94a3b8', top: 8 },
     },
-  },
-  color: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'],
-}));
+  };
+});
 
-const trendConfig = computed(() => ({
-  data: (props.trendData || []).map((d) => ({
-    date: d.checkDate,
-    score: d.overallScore || 0,
-  })),
-  xField: 'date',
-  yField: 'score',
-  smooth: true,
-  color: '#1677FF',
-  point: { size: 4, shape: 'circle' },
-  yAxis: { min: 0, max: 100 },
-  xAxis: { label: { formatter: (v: string) => v?.slice(5) } },
-}));
+const trendOption = computed(() => {
+  const data = props.trendData || [];
+  if (data.length === 0) return {};
+  return {
+    tooltip: { trigger: 'axis' },
+    grid: { top: 12, right: 16, bottom: 32, left: 48 },
+    xAxis: {
+      type: 'category',
+      data: data.map((d) => d.checkDate?.slice(5) || ''),
+      axisLine: { lineStyle: { color: '#e2e8f0' } },
+      axisTick: { show: false },
+      axisLabel: { fontSize: 11, color: '#94a3b8' },
+    },
+    yAxis: {
+      type: 'value', min: 0, max: 100,
+      splitLine: { lineStyle: { color: '#f1f5f9', type: 'dashed' } },
+      axisLabel: { fontSize: 11, color: '#94a3b8' },
+    },
+    series: [{
+      type: 'line',
+      data: data.map((d) => d.overallScore || 0),
+      smooth: 0.4,
+      symbol: 'circle',
+      symbolSize: 5,
+      lineStyle: { width: 2, color: '#1677FF' },
+      itemStyle: { color: '#1677FF', borderColor: '#fff', borderWidth: 2 },
+      areaStyle: {
+        color: {
+          type: 'linear', x: 0, y: 0, x2: 0, y2: 1,
+          colorStops: [
+            { offset: 0, color: 'rgba(22,119,255,0.15)' },
+            { offset: 1, color: 'rgba(22,119,255,0.01)' },
+          ],
+        },
+      },
+    }],
+  };
+});
+
+watch(
+  () => [props.latestScore, props.trendData],
+  () => {
+    if (pieOption.value?.series) updatePie(pieOption.value);
+    if (trendOption.value?.series) updateTrend(trendOption.value);
+  },
+  { deep: true },
+);
+
+onMounted(() => {
+  if (pieOption.value?.series) renderPie(pieOption.value);
+  if (trendOption.value?.series) renderTrend(trendOption.value);
+});
 </script>
 
 <template>
@@ -79,7 +135,7 @@ const trendConfig = computed(() => ({
       <a-row :gutter="16" class="mb-4">
         <a-col :span="8">
           <a-card title="综合得分" size="small">
-            <Pie v-bind="pieConfig" style="height: 280px" />
+            <EchartsUI ref="pieRef" style="height: 280px" />
           </a-card>
         </a-col>
 
@@ -124,7 +180,7 @@ const trendConfig = computed(() => ({
       </a-row>
 
       <a-card title="评分趋势" size="small" class="mt-4">
-        <Line v-if="trendConfig.data?.length" v-bind="trendConfig" style="height: 200px" />
+        <EchartsUI v-if="trendOption.series?.length" ref="trendRef" style="height: 200px" />
         <a-empty v-else description="暂无趋势数据" />
       </a-card>
     </template>

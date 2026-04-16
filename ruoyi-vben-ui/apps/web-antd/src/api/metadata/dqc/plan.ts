@@ -7,8 +7,8 @@ enum Api {
   info = '/system/metadata/dqc/plan',
   root = '/system/metadata/dqc/plan',
   execute = '/system/metadata/dqc/plan/{id}/execute',
-  publish = '/system/metadata/dqc/plan/{id}/publish',
-  disable = '/system/metadata/dqc/plan/{id}/disable',
+  publish = '/system/metadata/dqc/plan/publish/{id}',
+  disable = '/system/metadata/dqc/plan/disable/{id}',
   validateCron = '/system/metadata/dqc/plan/validate-cron',
 }
 

@@ -83,6 +83,17 @@ export const localMenuList: RouteRecordStringComponent[] = [
       },
     ],
   },
+  // 执行详情页（无独立菜单入口，通过执行记录列表跳转）
+  {
+    name: 'DqcExecutionDetail',
+    path: '/metadata/dqc/execution/detail',
+    component: '/metadata/dqc/execution/detail',
+    meta: {
+      title: '执行详情',
+      hideInMenu: true,
+      requireAuth: true,
+    },
+  },
   {
     component: '/_core/about/index',
     meta: {

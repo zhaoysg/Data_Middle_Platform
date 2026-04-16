@@ -187,7 +187,7 @@ const gridOptions: VxeGridProps = {
     },
     {
       title: '优先级',
-      field: 'ruleExpr',
+      field: 'rulePriority',
       width: 88,
       align: 'center',
       slots: { default: 'priorityCol' },

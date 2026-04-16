@@ -1,569 +1,158 @@
--- ry_bigdata_v1.data_domain definition
-
-CREATE TABLE `data_domain` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `domain_name` varchar(100) NOT NULL COMMENT '数据域名称',
-  `domain_code` varchar(50) DEFAULT NULL COMMENT '数据域编码',
-  `domain_desc` varchar(500) DEFAULT NULL COMMENT '数据域描述',
-  `owner_id` bigint DEFAULT NULL COMMENT '负责人ID',
-  `dept_id` bigint DEFAULT NULL COMMENT '部门ID',
-  `status` varchar(20) DEFAULT '0' COMMENT '状态 0=正常 1=停用',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `del_flag` char(1) DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_domain_code` (`domain_code`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2038857354410303490 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据域';
-
-
--- ry_bigdata_v1.data_layer definition
-
-CREATE TABLE `data_layer` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `layer_code` varchar(20) NOT NULL COMMENT '分层编码 ODS/DWD/DWS/ADS',
-  `layer_name` varchar(50) NOT NULL COMMENT '分层名称',
-  `layer_desc` varchar(500) DEFAULT NULL COMMENT '分层描述',
-  `layer_color` varchar(20) DEFAULT '#1890ff' COMMENT '颜色标识（前端 Tag 颜色）',
-  `sort_order` int DEFAULT '0' COMMENT '排序序号',
-  `status` varchar(20) DEFAULT '0' COMMENT '状态 0=正常 1=停用',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_tenant_layer_code` (`tenant_id`,`layer_code`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=53 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数仓分层';
-
-
--- ry_bigdata_v1.dqc_execution definition
-
-CREATE TABLE `dqc_execution` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `execution_no` varchar(64) NOT NULL COMMENT '执行编号',
-  `plan_id` bigint DEFAULT NULL COMMENT '方案ID',
-  `plan_name` varchar(100) DEFAULT NULL COMMENT '方案名称（冗余）',
-  `layer_code` varchar(20) DEFAULT NULL COMMENT '质检数据层',
-  `trigger_type` varchar(20) NOT NULL COMMENT '触发方式 MANUAL/SCHEDULE/API',
-  `trigger_user` bigint DEFAULT NULL COMMENT '触发用户',
-  `start_time` datetime DEFAULT NULL COMMENT '开始时间',
-  `end_time` datetime DEFAULT NULL COMMENT '结束时间',
-  `elapsed_ms` bigint DEFAULT NULL COMMENT '耗时',
-  `total_rules` int DEFAULT '0' COMMENT '总规则数',
-  `passed_count` int DEFAULT '0' COMMENT '通过数',
-  `failed_count` int DEFAULT '0' COMMENT '失败数',
-  `blocked_count` int DEFAULT '0' COMMENT '阻塞数',
-  `overall_score` decimal(5,2) DEFAULT NULL COMMENT '综合得分',
-  `status` varchar(20) NOT NULL DEFAULT 'RUNNING' COMMENT '状态 RUNNING/SUCCESS/FAILED/PARTIAL',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_execution_no` (`execution_no`),
-  KEY `idx_plan_id` (`plan_id`),
-  KEY `idx_status` (`status`),
-  KEY `idx_start_time` (`start_time`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='DQC执行记录';
-
-
--- ry_bigdata_v1.dqc_execution_detail definition
-
-CREATE TABLE `dqc_execution_detail` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `execution_id` bigint NOT NULL COMMENT '执行ID',
-  `rule_id` bigint NOT NULL COMMENT '规则ID',
-  `rule_name` varchar(100) DEFAULT NULL COMMENT '规则名称（冗余）',
-  `rule_code` varchar(50) DEFAULT NULL COMMENT '规则编码（冗余）',
-  `rule_type` varchar(50) DEFAULT NULL COMMENT '规则类型',
-  `dimension` varchar(50) DEFAULT NULL COMMENT '质量维度',
-  `target_ds_id` bigint DEFAULT NULL COMMENT '目标数据源',
-  `target_table` varchar(200) DEFAULT NULL COMMENT '目标表',
-  `target_column` varchar(100) DEFAULT NULL COMMENT '目标字段',
-  `actual_value` text COMMENT '实际执行值',
-  `threshold_value` text COMMENT '阈值/期望值',
-  `result_value` decimal(20,4) DEFAULT NULL COMMENT '执行结果值',
-  `pass_flag` char(1) DEFAULT NULL COMMENT '1=通过 0=失败',
-  `error_level` varchar(20) DEFAULT NULL COMMENT '错误级别',
-  `error_msg` text COMMENT '错误信息',
-  `execute_sql` text COMMENT '实际执行的SQL',
-  `execute_time` datetime DEFAULT NULL COMMENT '执行时间',
-  `elapsed_ms` bigint DEFAULT NULL COMMENT '耗时',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  PRIMARY KEY (`id`),
-  KEY `idx_execution_id` (`execution_id`),
-  KEY `idx_rule_id` (`rule_id`),
-  KEY `idx_pass_flag` (`pass_flag`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='DQC执行明细';
-
-
--- ry_bigdata_v1.dqc_plan definition
-
-CREATE TABLE `dqc_plan` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `plan_name` varchar(100) NOT NULL COMMENT '方案名称',
-  `plan_code` varchar(50) NOT NULL COMMENT '方案编码',
-  `plan_desc` varchar(500) DEFAULT NULL COMMENT '方案描述',
-  `bind_type` varchar(20) DEFAULT 'TABLE' COMMENT '绑定类型 TABLE/DOMAIN/LAYER/PATTERN',
-  `bind_value` text COMMENT '绑定值JSON',
-  `layer_code` varchar(20) DEFAULT NULL COMMENT '质检数据层（引用 data_layer.layer_code）',
-  `trigger_type` varchar(20) NOT NULL DEFAULT 'MANUAL' COMMENT '触发方式 MANUAL/SCHEDULE/API',
-  `trigger_cron` varchar(100) DEFAULT NULL COMMENT 'Cron表达式',
-  `alert_on_failure` char(1) NOT NULL DEFAULT '1' COMMENT '失败是否告警',
-  `auto_block` char(1) NOT NULL DEFAULT '0' COMMENT '强规则失败是否阻塞',
-  `status` varchar(20) NOT NULL DEFAULT 'DRAFT' COMMENT '状态 DRAFT/PUBLISHED/DISABLED',
-  `rule_count` int NOT NULL DEFAULT '0' COMMENT '关联规则数量',
-  `table_count` int NOT NULL DEFAULT '0' COMMENT '涉及表数量',
-  `last_execution_id` bigint DEFAULT NULL COMMENT '上次执行ID',
-  `last_score` decimal(5,2) DEFAULT NULL COMMENT '上次得分',
-  `last_execution_time` datetime DEFAULT NULL COMMENT '上次执行时间',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_plan_code` (`plan_code`),
-  KEY `idx_layer_code` (`layer_code`),
-  KEY `idx_status` (`status`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='DQC质检方案';
-
-
--- ry_bigdata_v1.dqc_plan_rule definition
-
-CREATE TABLE `dqc_plan_rule` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `plan_id` bigint NOT NULL COMMENT '方案ID',
-  `rule_id` bigint NOT NULL COMMENT '规则ID',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_plan_rule` (`plan_id`,`rule_id`),
-  KEY `idx_rule_id` (`rule_id`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='DQC方案规则关联';
-
-
--- ry_bigdata_v1.dqc_rule_def definition
-
-CREATE TABLE `dqc_rule_def` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `rule_name` varchar(100) NOT NULL COMMENT '规则名称',
-  `rule_code` varchar(50) NOT NULL COMMENT '规则编码',
-  `template_id` bigint DEFAULT NULL COMMENT '关联模板ID',
-  `rule_type` varchar(50) NOT NULL COMMENT '规则类型',
-  `apply_level` varchar(20) NOT NULL COMMENT '应用层级 TABLE/COLUMN/CROSS_FIELD/CROSS_TABLE',
-  `dimensions` varchar(200) DEFAULT NULL COMMENT '质量维度，多个逗号分隔',
-  `rule_expr` text COMMENT '规则表达式/SQL/正则',
-  `target_ds_id` bigint NOT NULL COMMENT '目标数据源ID（引用 sys_datasource）',
-  `target_table` varchar(200) DEFAULT NULL COMMENT '目标表名',
-  `target_column` varchar(100) DEFAULT NULL COMMENT '目标字段',
-  `compare_ds_id` bigint DEFAULT NULL COMMENT '对比数据源ID（跨表规则）',
-  `compare_table` varchar(200) DEFAULT NULL COMMENT '对比表名',
-  `compare_column` varchar(100) DEFAULT NULL COMMENT '对比字段',
-  `threshold_min` decimal(20,4) DEFAULT NULL COMMENT '最小阈值',
-  `threshold_max` decimal(20,4) DEFAULT NULL COMMENT '最大阈值',
-  `fluctuation_threshold` decimal(5,2) DEFAULT NULL COMMENT '波动阈值百分比',
-  `regex_pattern` varchar(500) DEFAULT NULL COMMENT '正则表达式',
-  `error_level` varchar(20) NOT NULL DEFAULT 'MEDIUM' COMMENT '错误级别 LOW/MEDIUM/HIGH/CRITICAL',
-  `rule_strength` varchar(10) DEFAULT 'WEAK' COMMENT '规则强度：STRONG-强规则/WEAK-弱规则',
-  `alert_receivers` varchar(500) DEFAULT NULL COMMENT '告警接收人，多个逗号分隔',
-  `sort_order` int NOT NULL DEFAULT '0' COMMENT '排序',
-  `enabled` char(1) NOT NULL DEFAULT '1' COMMENT '是否启用',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_rule_code` (`rule_code`),
-  KEY `idx_template_id` (`template_id`),
-  KEY `idx_target_ds_id` (`target_ds_id`),
-  KEY `idx_enabled` (`enabled`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='DQC规则定义';
-
-
--- ry_bigdata_v1.dqc_rule_template definition
-
-CREATE TABLE `dqc_rule_template` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `template_code` varchar(50) NOT NULL COMMENT '模板编码',
-  `template_name` varchar(100) NOT NULL COMMENT '模板名称',
-  `template_desc` varchar(500) DEFAULT NULL COMMENT '模板描述',
-  `rule_type` varchar(50) NOT NULL COMMENT '规则类型',
-  `apply_level` varchar(20) NOT NULL COMMENT '应用层级 TABLE/COLUMN/CROSS_FIELD/CROSS_TABLE',
-  `default_expr` text COMMENT '默认SQL模板',
-  `threshold_json` json DEFAULT NULL COMMENT '默认阈值配置',
-  `param_spec` json DEFAULT NULL COMMENT '参数规格',
-  `dimension` varchar(50) DEFAULT NULL COMMENT '质量维度',
-  `builtin` char(1) NOT NULL DEFAULT '1' COMMENT '是否内置 1=内置',
-  `enabled` char(1) NOT NULL DEFAULT '1' COMMENT '是否启用',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_template_code` (`template_code`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=41 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='DQC规则模板';
-
-
--- ry_bigdata_v1.gov_glossary_category definition
-
-CREATE TABLE `gov_glossary_category` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `parent_id` bigint DEFAULT '0' COMMENT '父分类ID',
-  `category_name` varchar(100) NOT NULL COMMENT '分类名称',
-  `category_code` varchar(50) DEFAULT NULL COMMENT '分类编码',
-  `sort_order` int DEFAULT '0' COMMENT '排序',
-  `status` varchar(20) DEFAULT '0' COMMENT '状态 0=正常 1=停用',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_parent_id` (`parent_id`),
-  KEY `idx_category_code` (`category_code`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='术语分类';
-
-
--- ry_bigdata_v1.gov_glossary_mapping definition
-
-CREATE TABLE `gov_glossary_mapping` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `term_id` bigint NOT NULL COMMENT '术语ID',
-  `term_name` varchar(200) DEFAULT NULL COMMENT '术语名称（冗余）',
-  `asset_type` varchar(20) NOT NULL COMMENT '资产类型 TABLE/COLUMN',
-  `asset_id` bigint NOT NULL COMMENT 'metadata_table/column.id',
-  `ds_id` bigint DEFAULT NULL COMMENT '数据源ID',
-  `table_name` varchar(200) DEFAULT NULL COMMENT '表名（冗余）',
-  `column_name` varchar(100) DEFAULT NULL COMMENT '字段名（冗余）',
-  `mapping_type` varchar(20) DEFAULT 'CONTAINS' COMMENT '关联类型 CONTAINS/DEFINES/REFERENCES',
-  `confidence` int NOT NULL DEFAULT '100' COMMENT '置信度 0-100',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_mapping` (`term_id`,`asset_type`,`asset_id`),
-  KEY `idx_term_id` (`term_id`),
-  KEY `idx_asset` (`asset_type`,`asset_id`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='术语资产映射';
-
-
--- ry_bigdata_v1.gov_glossary_term definition
-
-CREATE TABLE `gov_glossary_term` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `term_name` varchar(200) NOT NULL COMMENT '术语名称（如：订单）',
-  `term_alias` varchar(500) DEFAULT NULL COMMENT '别名，多个逗号分隔',
-  `term_desc` varchar(1000) DEFAULT NULL COMMENT '术语定义/业务说明',
-  `category_id` bigint DEFAULT NULL COMMENT '分类ID',
-  `biz_owner` bigint DEFAULT NULL COMMENT '业务负责人ID',
-  `tech_owner` bigint DEFAULT NULL COMMENT '技术负责人ID',
-  `status` varchar(20) DEFAULT 'DRAFT' COMMENT '状态 DRAFT/PUBLISHED/DEPRECATED',
-  `tag_ids` varchar(500) DEFAULT NULL COMMENT '关联标签ID',
-  `source` varchar(100) DEFAULT NULL COMMENT '来源',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_term_name` (`term_name`),
-  KEY `idx_category_id` (`category_id`),
-  KEY `idx_status` (`status`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='业务术语';
-
-
--- ry_bigdata_v1.gov_lineage definition
-
-CREATE TABLE `gov_lineage` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `src_ds_id` bigint NOT NULL COMMENT '源数据源ID',
-  `src_ds_name` varchar(100) DEFAULT NULL COMMENT '源数据源名称（冗余）',
-  `src_table_name` varchar(200) NOT NULL COMMENT '源表名',
-  `src_column_name` varchar(100) DEFAULT NULL COMMENT '源字段（null=整表）',
-  `tgt_ds_id` bigint NOT NULL COMMENT '目标数据源ID',
-  `tgt_ds_name` varchar(100) DEFAULT NULL COMMENT '目标数据源名称（冗余）',
-  `tgt_table_name` varchar(200) NOT NULL COMMENT '目标表名',
-  `tgt_column_name` varchar(100) DEFAULT NULL COMMENT '目标字段',
-  `lineage_type` varchar(20) NOT NULL COMMENT '血缘类型 DIRECT/DERIVED',
-  `transform_type` varchar(20) DEFAULT 'ETL' COMMENT '转换类型 ETL/SQL/STREAMING/COPY',
-  `transform_sql` text COMMENT '转换SQL片段',
-  `biz_description` varchar(500) DEFAULT NULL COMMENT '业务说明',
-  `owner_id` bigint DEFAULT NULL COMMENT '负责人ID',
-  `verify_status` varchar(20) DEFAULT 'UNVERIFIED' COMMENT '核验状态 UNVERIFIED/VERIFIED/INVALID',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_lineage_pair` (`src_ds_id`,`src_table_name`,`src_column_name`,`tgt_ds_id`,`tgt_table_name`,`tgt_column_name`),
-  KEY `idx_src` (`src_ds_id`,`src_table_name`),
-  KEY `idx_tgt` (`tgt_ds_id`,`tgt_table_name`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据血缘';
-
-
--- ry_bigdata_v1.metadata_catalog definition
-
-CREATE TABLE `metadata_catalog` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `catalog_name` varchar(100) NOT NULL COMMENT '目录名称',
-  `catalog_code` varchar(50) DEFAULT NULL COMMENT '目录编码',
-  `catalog_type` varchar(20) NOT NULL COMMENT '目录类型 BUSINESS_DOMAIN/DATA_DOMAIN/ALBUM',
-  `parent_id` bigint DEFAULT '0' COMMENT '父目录ID（0=顶级）',
-  `sort_order` int DEFAULT '0' COMMENT '排序序号',
-  `status` varchar(20) DEFAULT '0' COMMENT '状态 0=正常 1=停用',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `del_flag` char(1) DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_parent_id` (`parent_id`),
-  KEY `idx_tenant_id` (`tenant_id`),
-  KEY `idx_catalog_code` (`catalog_code`)
-) ENGINE=InnoDB AUTO_INCREMENT=2038948407532380162 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='资产目录';
-
-
--- ry_bigdata_v1.metadata_column definition
-
-CREATE TABLE `metadata_column` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `table_id` bigint NOT NULL COMMENT '关联 metadata_table.id',
-  `ds_id` bigint DEFAULT NULL COMMENT '数据源ID',
-  `table_name` varchar(200) DEFAULT NULL COMMENT '表名（冗余存储）',
-  `column_name` varchar(100) NOT NULL COMMENT '字段名',
-  `column_alias` varchar(200) DEFAULT NULL COMMENT '字段中文别名（可编辑）',
-  `column_comment` varchar(500) DEFAULT NULL COMMENT '字段注释',
-  `data_type` varchar(50) DEFAULT NULL COMMENT '数据类型',
-  `is_nullable` varchar(10) DEFAULT 'YES' COMMENT '是否可空',
-  `column_key` varchar(10) DEFAULT NULL COMMENT '键类型 PRI/UNI/MUL',
-  `default_value` varchar(500) DEFAULT NULL COMMENT '默认值',
-  `is_primary_key` tinyint(1) DEFAULT '0' COMMENT '是否主键',
-  `is_foreign_key` tinyint(1) DEFAULT '0' COMMENT '是否外键',
-  `fk_reference` varchar(200) DEFAULT NULL COMMENT '外键引用（格式: table.column）',
-  `is_sensitive` tinyint(1) DEFAULT '0' COMMENT '是否敏感字段',
-  `sensitivity_level` varchar(20) DEFAULT 'NORMAL' COMMENT '敏感等级',
-  `sort_order` int DEFAULT '0' COMMENT '字段排序序号',
-  `del_flag` char(1) DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ds_table_column` (`tenant_id`,`ds_id`,`table_name`,`column_name`),
-  KEY `idx_table_id` (`table_id`),
-  KEY `idx_ds_id` (`ds_id`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=151 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='元数据字段';
-
-
--- ry_bigdata_v1.metadata_scan_log definition
-
-CREATE TABLE `metadata_scan_log` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `ds_id` bigint NOT NULL COMMENT '数据源ID',
-  `ds_name` varchar(100) DEFAULT NULL COMMENT '数据源名称',
-  `ds_code` varchar(50) DEFAULT NULL COMMENT '数据源编码',
-  `scan_type` varchar(20) DEFAULT 'FULL' COMMENT '扫描类型 TABLE_ONLY/FULL',
-  `status` varchar(20) DEFAULT 'RUNNING' COMMENT '状态 RUNNING/SUCCESS/FAILED/PARTIAL',
-  `total_tables` int DEFAULT '0' COMMENT '总表数',
-  `success_count` int DEFAULT '0' COMMENT '成功数',
-  `partial_count` int DEFAULT '0' COMMENT '部分成功数（字段级失败）',
-  `failed_count` int DEFAULT '0' COMMENT '失败数',
-  `error_detail` text COMMENT '错误详情（格式：表名:错误信息；表名:错误信息）',
-  `start_time` datetime DEFAULT NULL COMMENT '开始时间',
-  `end_time` datetime DEFAULT NULL COMMENT '结束时间',
-  `elapsed_ms` bigint DEFAULT NULL COMMENT '耗时毫秒',
-  `scan_user_id` bigint DEFAULT NULL COMMENT '扫描触发用户ID',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_ds_id` (`ds_id`),
-  KEY `idx_status` (`status`),
-  KEY `idx_scan_time` (`start_time`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB AUTO_INCREMENT=2038982807267696642 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='元数据扫描记录';
-
-
--- ry_bigdata_v1.metadata_scan_schedule definition
-
-CREATE TABLE `metadata_scan_schedule` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `ds_id` bigint NOT NULL COMMENT '数据源ID',
-  `ds_name` varchar(100) DEFAULT NULL COMMENT '数据源名称（冗余）',
-  `schedule_type` varchar(20) NOT NULL DEFAULT 'MANUAL' COMMENT '调度类型 MANUAL/CRON/EVENT',
-  `cron_expr` varchar(50) DEFAULT NULL COMMENT 'Cron表达式',
-  `enabled` char(1) NOT NULL DEFAULT '1' COMMENT '是否启用 1=是',
-  `sync_column` char(1) NOT NULL DEFAULT '1' COMMENT '是否同步字段 1=是',
-  `last_scan_time` datetime DEFAULT NULL COMMENT '上次扫描时间',
-  `next_scan_time` datetime DEFAULT NULL COMMENT '下次扫描时间',
-  `change_alert` char(1) NOT NULL DEFAULT '1' COMMENT '变更是否告警',
-  `alert_targets` varchar(500) DEFAULT NULL COMMENT '告警接收人，多个逗号分隔',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_ds_id` (`ds_id`),
-  KEY `idx_enabled` (`enabled`),
-  KEY `idx_schedule_type` (`schedule_type`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='扫描调度配置';
-
-
--- ry_bigdata_v1.metadata_table definition
-
-CREATE TABLE `metadata_table` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `ds_id` bigint DEFAULT NULL COMMENT '数据源ID',
-  `ds_name` varchar(100) DEFAULT NULL COMMENT '数据源名称',
-  `ds_code` varchar(50) DEFAULT NULL COMMENT '数据源编码',
-  `table_name` varchar(200) NOT NULL COMMENT '物理表名',
-  `table_alias` varchar(200) DEFAULT NULL COMMENT '表中文别名（可编辑）',
-  `table_comment` varchar(1000) DEFAULT NULL COMMENT '表注释',
-  `table_type` varchar(30) DEFAULT 'TABLE' COMMENT '表类型 TABLE/VIEW',
-  `data_layer` varchar(20) DEFAULT NULL COMMENT '数仓分层 ODS/DWD/DWS/ADS',
-  `data_domain` varchar(50) DEFAULT NULL COMMENT '数据域',
-  `row_count` bigint DEFAULT NULL COMMENT '行数',
-  `storage_bytes` bigint DEFAULT NULL COMMENT '存储大小估算',
-  `source_update_time` datetime DEFAULT NULL COMMENT '源表最后更新时间',
-  `sensitivity_level` varchar(20) DEFAULT 'NORMAL' COMMENT '敏感等级 NORMAL/INNER/SENSITIVE/HIGHLY_SENSITIVE',
-  `owner_id` bigint DEFAULT NULL COMMENT '负责人ID',
-  `dept_id` bigint DEFAULT NULL COMMENT '部门ID',
-  `catalog_id` bigint DEFAULT NULL COMMENT '资产目录ID',
-  `tags` varchar(500) DEFAULT NULL COMMENT '标签',
-  `last_scan_time` datetime DEFAULT NULL COMMENT '最后扫描时间',
-  `status` varchar(20) DEFAULT 'ACTIVE' COMMENT '状态 ACTIVE/ARCHIVED/DEPRECATED',
-  `del_flag` char(1) DEFAULT '0' COMMENT '删除标志',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` varchar(64) DEFAULT '' COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`id`),
-  UNIQUE KEY `uk_ds_table` (`tenant_id`,`ds_id`,`table_name`),
-  KEY `idx_ds_id` (`ds_id`),
-  KEY `idx_data_layer` (`data_layer`),
-  KEY `idx_data_domain` (`data_domain`),
-  KEY `idx_status` (`status`),
-  KEY `idx_catalog_id` (`catalog_id`),
-  KEY `idx_tenant_id` (`tenant_id`),
-  KEY `idx_last_scan_time` (`last_scan_time`)
-) ENGINE=InnoDB AUTO_INCREMENT=2038856913555398693 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='元数据表';
-
-
--- ry_bigdata_v1.metadata_table_history definition
-
-CREATE TABLE `metadata_table_history` (
-  `id` bigint NOT NULL AUTO_INCREMENT COMMENT '主键ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `table_id` bigint NOT NULL COMMENT 'metadata_table.id',
-  `ds_id` bigint DEFAULT NULL COMMENT '数据源ID',
-  `table_name` varchar(200) NOT NULL COMMENT '表名',
-  `snapshot_time` datetime NOT NULL COMMENT '快照时间',
-  `row_count` bigint DEFAULT NULL COMMENT '当时行数',
-  `column_count` int DEFAULT NULL COMMENT '当时字段数',
-  `column_hash` varchar(64) DEFAULT NULL COMMENT '字段名MD5（检测字段变更）',
-  `change_type` varchar(20) DEFAULT NULL COMMENT '变更类型 ADD/DROP/MODIFY/UNCHANGED',
-  `change_detail` text COMMENT '变更详情JSON',
-  `remark` varchar(500) DEFAULT NULL COMMENT '备注',
-  `del_flag` char(1) NOT NULL DEFAULT '0' COMMENT '删除标志',
-  `create_by` varchar(64) DEFAULT '' COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  PRIMARY KEY (`id`),
-  KEY `idx_table_id` (`table_id`),
-  KEY `idx_snapshot_time` (`snapshot_time`),
-  KEY `idx_tenant_id` (`tenant_id`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='表变更历史';
-
-
--- ry_bigdata_v1.sys_datasource definition
-
-CREATE TABLE `sys_datasource` (
-  `ds_id` bigint NOT NULL AUTO_INCREMENT COMMENT '数据源ID',
-  `tenant_id` varchar(20) DEFAULT '000000' COMMENT '租户编号',
-  `ds_name` varchar(100) NOT NULL COMMENT '数据源名称',
-  `ds_code` varchar(50) NOT NULL COMMENT '数据源编码',
-  `ds_type` varchar(30) NOT NULL COMMENT '数据源类型：MYSQL/SQLSERVER/ORACLE/TIDB/POSTGRESQL',
-  `host` varchar(255) DEFAULT NULL COMMENT '主机地址',
-  `port` int DEFAULT NULL COMMENT '端口',
-  `database_name` varchar(100) DEFAULT NULL COMMENT '数据库名',
-  `schema_name` varchar(100) DEFAULT NULL COMMENT 'Schema名称(用于PostgreSQL)',
-  `username` varchar(100) DEFAULT NULL COMMENT '用户名',
-  `password` varchar(255) DEFAULT NULL COMMENT '密码',
-  `connection_params` text COMMENT '额外连接参数JSON',
-  `data_layer` varchar(20) DEFAULT NULL COMMENT '数仓层标记：ODS/DWD/DWS/ADS',
-  `dept_id` bigint DEFAULT NULL COMMENT '部门ID',
-  `status` char(1) DEFAULT '0' COMMENT '状态（0正常 1停用）',
-  `del_flag` char(1) DEFAULT '0' COMMENT '删除标志（0代表存在 1代表删除）',
-  `remark` varchar(500) DEFAULT '' COMMENT '备注',
-  `create_dept` bigint DEFAULT NULL COMMENT '创建部门',
-  `create_by` bigint DEFAULT NULL COMMENT '创建者',
-  `create_time` datetime DEFAULT NULL COMMENT '创建时间',
-  `update_by` bigint DEFAULT NULL COMMENT '更新者',
-  `update_time` datetime DEFAULT NULL COMMENT '更新时间',
-  PRIMARY KEY (`ds_id`),
-  UNIQUE KEY `uk_ds_code` (`ds_code`),
-  KEY `idx_ds_type` (`ds_type`),
-  KEY `idx_status` (`status`)
-) ENGINE=InnoDB AUTO_INCREMENT=2038582379342303234 DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_0900_ai_ci COMMENT='数据源配置表';
+INSERT INTO ry_bigdata_v1.data_domain (tenant_id,domain_name,domain_code,domain_desc,owner_id,dept_id,status,remark,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','用户域','USER','用户注册、登录、认证、会员体系等用户相关数据',NULL,100,'0','涵盖用户全生命周期数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','会员域','MEMBER','会员等级、积分、权益、成长值等会员相关数据',NULL,100,'0','会员运营相关数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','商品域','PRODUCT','商品信息、SKU、SPU、类目、属性、价格等商品数据',NULL,100,'0','商品主数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','交易域','TRADE','订单、支付、退款、优惠券、促销活动等交易相关数据',NULL,100,'0','核心交易业务域','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','库存域','INVENTORY','采购、库存、出入库、仓储、物流等供应链数据',NULL,100,'0','供应链库存管理','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','营销域','MARKETING','促销活动、广告投放、内容运营、用户触达等营销数据',NULL,100,'0','营销活动相关数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','内容域','CONTENT','内容发布、评论、点赞、收藏、内容推荐等数据',NULL,100,'0','社区/内容平台数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','财务域','FINANCE','收入、支出、利润、应收账款、发票等财务数据',NULL,100,'0','财务核算相关数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','客服域','CUSTOMER_SERVICE','工单、客诉、满意度调查、在线客服等客服数据',NULL,100,'0','客户服务与支持','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','行为域','BEHAVIOR','用户浏览、点击、搜索、停留时长等用户行为埋点数据',NULL,100,'0','用户行为分析数据','0',100,'1','2026-04-10 09:37:20','0',NULL);
+INSERT INTO ry_bigdata_v1.data_domain (tenant_id,domain_name,domain_code,domain_desc,owner_id,dept_id,status,remark,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','风控域','RISK','欺诈检测、信用评估、风险预警、安全策略等风控数据',NULL,100,'0','风险控制与安全','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','公共域','COMMON','地区字典、机构字典、行业分类等公共基础参考数据',NULL,100,'0','跨业务可复用的公共数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','日志域','LOG','系统日志、应用日志、审计日志、安全日志等日志数据',NULL,100,'0','可观测性和审计数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','标签域','TAG','用户标签、商品标签、行为标签等各类标签数据',NULL,100,'0','标签体系与画像数据','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','实时域','RT','实时计算、实时大屏、流式处理等实时数据',NULL,100,'0','实时数据处理与分析','0',100,'1','2026-04-10 09:37:20','0',NULL);
+INSERT INTO ry_bigdata_v1.data_layer (tenant_id,layer_code,layer_name,layer_desc,layer_color,sort_order,status,remark,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','ODS','操作数据层','Operational Data Store，承接所有业务系统原始数据，保持与源系统一致的结构和内容，保留历史数据','#909399',1,'0','标准数仓第一层，原始数据不做任何加工',100,'1','2026-04-10 09:30:44','0',NULL),
+	 ('000000','DWD','明细数据层','Data Warehouse Detail，对ODS层数据进行清洗、去重、规范化处理，建立一致的数据口径','#409EFF',2,'0','标准数仓第二层，进行数据清洗和规范化，保留历史变化',100,'1','2026-04-10 09:30:44','0',NULL),
+	 ('000000','DWS','汇总数据层','Data Warehouse Summary，按业务主题或分析维度对DWD层数据进行汇总加工，提供公共指标层','#67C23A',3,'0','标准数仓第三层，按主题汇总，形成宽表和轻度汇总表',100,'1','2026-04-10 09:30:44','0',NULL),
+	 ('000000','ADS','应用数据层','Application Data Store，面向应用层和报表需求，对DWS层进一步加工，直接输出到报表和应用','#E6A23C',4,'0','标准数仓第四层，面向前端应用和报表',100,'1','2026-04-10 09:30:44','0',NULL),
+	 ('000000','DIM','维度数据层','Dimension Data Store，存储所有维度表，包括缓慢变化维度，支持拉链表设计','#9B59B6',5,'0','维度建模可选层，存放所有维度信息',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','TMP','临时数据层','Temporary Data Store，ETL过程中的临时中间结果，加工完成后清理','#95A5A6',6,'0','临时存放中间加工结果，不保留历史',100,'1','2026-04-10 09:37:20','0',NULL);
+INSERT INTO ry_bigdata_v1.dqc_plan (tenant_id,plan_name,plan_code,plan_desc,bind_type,bind_value,layer_code,trigger_type,trigger_cron,alert_on_failure,alert_on_success,auto_block,sensitivity_level,status,rule_count,table_count,last_execution_id,last_score,last_execution_time,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','111','222',NULL,'TABLE','{"v":2,"dsId":"2038582379342303234","tables":["note"]}','','MANUAL',NULL,'1','0','0',NULL,'DRAFT',0,0,NULL,NULL,NULL,'0',NULL,'','2026-04-10 22:06:00','','2026-04-10 22:06:00'),
+	 ('000000','1','1',NULL,'SENSITIVITY_LEVEL','{"v":2,"dsId":"2038582379342303234","tables":["note"],"bindSensitivityLevel":"L4"}','ODS','MANUAL',NULL,'1','0','0',NULL,'PUBLISHED',0,0,NULL,NULL,NULL,'0',NULL,'','2026-04-11 07:48:58','','2026-04-11 10:25:04'),
+	 ('000000','3','3','3
+','SENSITIVITY_LEVEL','{"v":2,"dsId":"2038582379342303234","tables":["chat_message"],"bindSensitivityLevel":"L4"}','ODS','MANUAL',NULL,'1','0','0',NULL,'DRAFT',0,0,NULL,NULL,NULL,'0',NULL,'','2026-04-11 10:25:53','','2026-04-11 12:30:35');
+	INSERT INTO ry_bigdata_v1.dqc_rule_def (tenant_id,rule_name,rule_code,template_id,table_id,column_id,compare_table_id,compare_column_id,rule_type,apply_level,dimensions,rule_expr,threshold_min,threshold_max,fluctuation_threshold,regex_pattern,error_level,rule_strength,alert_receivers,sort_order,enabled,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+		('000000','ODS层用户表手机号空值检查','R01_USER_PHONE_NULL',1,NULL,NULL,NULL,NULL,'NULL_CHECK','COLUMN','COMPLETENESS','SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NULL OR {{column}} = '''' AS null_count, (SELECT COUNT(*) FROM {{table}}) AS total_count',0.0000,5.0000,NULL,NULL,'MEDIUM','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','ODS层用户表手机号唯一性检查','R02_USER_PHONE_UNIQUE',2,NULL,NULL,NULL,NULL,'UNIQUE','COLUMN','UNIQUENESS','SELECT COUNT(*) - COUNT(DISTINCT {{column}}) AS dup_count FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} <> '''' ',0.0000,1.0000,NULL,NULL,'HIGH','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','DWD层订单表订单金额合理性','R03_ORDER_AMOUNT_RANGE',3,NULL,NULL,NULL,NULL,'THRESHOLD','COLUMN','ACCURACY','SELECT COUNT(*) FROM {{table}} WHERE {{column}} < {{min_value}} OR {{column}} > {{max_value}} AS bad_count, (SELECT COUNT(*) FROM {{table}}) AS total_count',0.0000,999999.0000,NULL,NULL,'HIGH','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','ODS层用户表邮箱有效性','R04_USER_EMAIL_VALID',4,NULL,NULL,NULL,NULL,'REGEX','COLUMN','VALIDITY','SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT REGEXP ''^[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+.[A-Za-z]{2,}$'' AS invalid_count, (SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NOT NULL) AS total_count',0.0000,5.0000,NULL,NULL,'MEDIUM','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','DWD层订单表用户ID引用完整性','R05_ORDER_USER_FK',8,NULL,NULL,NULL,NULL,'CUSTOM_SQL','CROSS_TABLE','CONSISTENCY','SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NOT NULL AND NOT EXISTS (SELECT 1 FROM {{compare_table}} WHERE {{compare_column}} = {{column}}) AS orphan_count, (SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NOT NULL) AS total_count',0.0000,0.0000,NULL,NULL,'HIGH','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','DWD层用户表身份证号唯一性','R06_USER_IDCARD_UNIQUE',2,NULL,NULL,NULL,NULL,'UNIQUE','COLUMN','UNIQUENESS','SELECT COUNT(*) - COUNT(DISTINCT {{column}}) AS dup_count FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} <> '''' ',0.0000,1.0000,NULL,NULL,'HIGH','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','DWD层商品表状态枚举有效性','R07_PRODUCT_STATUS_ENUM',4,NULL,NULL,NULL,NULL,'REGEX','COLUMN','VALIDITY','SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT IN (''ACTIVE'',''INACTIVE'',''DELETED'') AS invalid_count, (SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NOT NULL) AS total_count',0.0000,5.0000,NULL,NULL,'LOW','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','DWD层订单表日订单量波动监控','R08_ORDER_DAILY_FLUCTUATION',6,NULL,NULL,NULL,NULL,'FLUCTUATION','TABLE','TIMELINESS','SELECT ABS((SELECT COUNT(*) FROM {{table}} WHERE DATE(create_time) = CURDATE()) - (SELECT COUNT(*) FROM {{table}} WHERE DATE(create_time) = DATE_SUB(CURDATE(), INTERVAL 1 DAY))) / NULLIF((SELECT COUNT(*) FROM {{table}} WHERE DATE(create_time) = DATE_SUB(CURDATE(), INTERVAL 1 DAY)), 0) * 100 AS fluctuation_pct',0.0000,20.0000,NULL,NULL,'MEDIUM','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','ODS层用户表重复记录检查','R09_USER_DUPLICATE',7,NULL,NULL,NULL,NULL,'CUSTOM_SQL','TABLE','UNIQUENESS','SELECT COUNT(*) - COUNT(DISTINCT {{column}}) AS duplicate_count FROM {{table}}',0.0000,1.0000,NULL,NULL,'MEDIUM','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL),
+		('000000','DWD层商品表商品ID唯一性','R10_PRODUCT_ID_UNIQUE',2,NULL,NULL,NULL,NULL,'UNIQUE','COLUMN','UNIQUENESS','SELECT COUNT(*) - COUNT(DISTINCT {{column}}) AS dup_count FROM {{table}} WHERE {{column}} IS NOT NULL',0.0000,1.0000,NULL,NULL,'HIGH','WEAK',NULL,0,'0','0',NULL,'admin','2026-04-06 19:41:09','',NULL);
+INSERT INTO ry_bigdata_v1.dqc_rule_def (tenant_id,rule_name,rule_code,template_id,table_id,column_id,compare_table_id,compare_column_id,rule_type,apply_level,dimensions,rule_expr,threshold_min,threshold_max,fluctuation_threshold,regex_pattern,error_level,rule_strength,alert_receivers,sort_order,enabled,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','ssss','RULE_M6DHRQEI',1,NULL,NULL,NULL,NULL,'NULL_CHECK','TABLE','COMPLETENESS,UNIQUENESS,TIMELINESS,ACCURACY,VALIDITY,CONSISTENCY','SELECT COUNT(*) FROM {{table}} WHERE {{column}} IS NULL OR {{column}} = '''' AS null_count, (SELECT COUNT(*) FROM {{table}}) AS total_count',NULL,NULL,NULL,NULL,'MEDIUM','WEAK',NULL,0,'0','1',NULL,'','2026-04-08 17:56:03','','2026-04-08 17:56:07'),
+	 ('000000','1','RULE_48RBS6TT',17,2038856913555398714,303,NULL,NULL,'NULL_CHECK','TABLE','COMPLETENESS','SELECT (COUNT(*) - COUNT({{column}})) * 100.0 / NULLIF(COUNT(*), 0) AS null_pct FROM {{table}}',1.0000,2.0000,100.00,NULL,'MEDIUM','WEAK',NULL,0,'0','0',NULL,'','2026-04-10 17:21:40','','2026-04-10 22:02:13');
+INSERT INTO ry_bigdata_v1.dqc_rule_template (tenant_id,template_code,template_name,template_desc,rule_type,apply_level,default_expr,threshold_json,param_spec,dimension,builtin,enabled,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','TBL_ROW_COUNT_MIN','表行数下限检测','检测表行数是否低于最小阈值','THRESHOLD','TABLE','SELECT COUNT(*) AS cnt FROM {{table}}','{"threshold_min": 1}','{"remark": "table_name=表名", "table_name": ""}','COMPLETENESS','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','TBL_ROW_COUNT_MAX','表行数上限检测','检测表行数是否超过最大阈值（防数据爆炸）','THRESHOLD','TABLE','SELECT COUNT(*) AS cnt FROM {{table}}','{"threshold_max": 10000000}','{"table_name": ""}','COMPLETENESS','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','TBL_SIZE_CHECK','表存储大小检测','检测表存储大小是否超过阈值','THRESHOLD','TABLE','SELECT COALESCE(SUM(data_length + index_length), 0) AS size_bytes FROM information_schema.tables WHERE table_name = ''{{table}}','{"threshold_max": 1073741824}','{"table_name": ""}','COMPLETENESS','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_ENUM_WHITELIST','字段枚举白名单检测','检测字段值是否在允许的枚举值列表内','REGEX','COLUMN','SELECT COUNT(*) AS enum_violation FROM {{table}} WHERE {{column}} NOT IN ({{enum_values}}) AND {{column}} IS NOT NULL','{"threshold_min": 0}','{"table_name": "", "column_name": "", "enum_values": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_LENGTH_RANGE','字段字符串长度范围','检测字段字符串长度是否在指定范围内','THRESHOLD','COLUMN','SELECT COUNT(*) AS length_violation FROM {{table}} WHERE LENGTH(CAST({{column}} AS CHAR)) NOT BETWEEN {{min_len}} AND {{max_len}}','{"threshold_min": 0}','{"max_len": "", "min_len": "", "table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_DECIMAL_PLACES','字段小数位数检测','检测DECIMAL字段的小数位数是否超限','THRESHOLD','COLUMN','SELECT COUNT(*) AS decimal_violation FROM {{table}} WHERE {{column}} IS NOT NULL AND LENGTH(TRIM(TRAILING ''0'' FROM TRIM(TRAILING ''.'' FROM CAST({{column}} AS CHAR)))) - LOCATE(''.'', TRIM(TRAILING ''0'' FROM TRIM(TRAILING ''.'' FROM CAST({{column}} AS CHAR)))) > {{max_decimal}}','{"threshold_min": 0}','{"table_name": "", "column_name": "", "max_decimal": ""}','ACCURACY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_JSON_FORMAT','字段JSON格式检测','检测字段是否为合法的JSON格式','THRESHOLD','COLUMN','SELECT COUNT(*) AS json_violation FROM {{table}} WHERE {{column}} IS NOT NULL AND JSON_VALID({{column}}) = 0','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0','2026-04-10 17:35:17'),
+	 ('000000','COL_URL_FORMAT','字段URL格式检测','检测字段是否为合法的URL格式','REGEX','COLUMN','SELECT COUNT(*) AS url_violation FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT REGEXP ''^https?://[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}(/.*)?$''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0','2026-04-10 17:35:16'),
+	 ('000000','COL_EMAIL_FORMAT','字段邮箱格式检测','检测字段是否为合法的邮箱格式','REGEX','COLUMN','SELECT COUNT(*) AS email_violation FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT REGEXP ''^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_MOBILE_FORMAT','字段手机号格式检测','检测字段是否为中国大陆手机号格式','REGEX','COLUMN','SELECT COUNT(*) AS mobile_violation FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT REGEXP ''^1[3-9]\\d{9}$''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL);
+INSERT INTO ry_bigdata_v1.dqc_rule_template (tenant_id,template_code,template_name,template_desc,rule_type,apply_level,default_expr,threshold_json,param_spec,dimension,builtin,enabled,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','COL_IDCARD_FORMAT','字段身份证号格式检测','检测字段是否为合法身份证号格式（18位）','REGEX','COLUMN','SELECT COUNT(*) AS idcard_violation FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT REGEXP ''^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]$''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_EMPTY_STRING','字段空字符串检测','检测字段是否存在空字符串（不同于NULL）','THRESHOLD','COLUMN','SELECT COUNT(*) AS empty_count FROM {{table}} WHERE {{column}} = ''''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','COMPLETENESS','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_PURE_DIGIT','字段纯数字检测','检测字段值是否全为数字','THRESHOLD','COLUMN','SELECT COUNT(*) AS non_digit_count FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT REGEXP ''^[0-9]+$''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_PURE_LETTER','字段纯字母检测','检测字段值是否全为字母','THRESHOLD','COLUMN','SELECT COUNT(*) AS non_letter_count FROM {{table}} WHERE {{column}} IS NOT NULL AND {{column}} NOT REGEXP ''^[a-zA-Z]+$''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_DATE_FORMAT','字段日期格式检测','检测字段是否为有效日期格式','THRESHOLD','COLUMN','SELECT COUNT(*) AS date_violation FROM {{table}} WHERE {{column}} IS NOT NULL AND STR_TO_DATE({{column}}, ''%Y-%m-%d'') IS NULL AND {{column}} NOT REGEXP ''^\\d{4}-\\d{2}-\\d{2}$''','{"threshold_min": 0}','{"table_name": "", "column_name": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_SUM_CHECK','字段汇总值检测','检测字段SUM值是否超过阈值','THRESHOLD','COLUMN','SELECT COALESCE(SUM({{column}}), 0) AS sum_val FROM {{table}}','{"threshold_min": 0}','{"table_name": "", "column_name": "", "threshold_sum": ""}','ACCURACY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_NULL_RATIO','字段NULL占比检测','检测字段空值比例是否超过阈值','NULL_CHECK','COLUMN','SELECT (COUNT(*) - COUNT({{column}})) * 100.0 / NULLIF(COUNT(*), 0) AS null_pct FROM {{table}}','{"threshold_pct": 5}','{"table_name": "", "column_name": "", "threshold_pct": ""}','COMPLETENESS','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','COL_STDDEV','字段离散度检测','检测字段值标准差是否在合理范围','THRESHOLD','COLUMN','SELECT COALESCE(STDDEV({{column}}), 0) AS stddev_val FROM {{table}} WHERE {{column}} IS NOT NULL','{"threshold_max": 10000}','{"table_name": "", "column_name": "", "threshold_max": ""}','ACCURACY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','CROSS_A_LESS_B','字段A<字段B一致性','检测字段A是否始终小于字段B','THRESHOLD','CROSS_FIELD','SELECT COUNT(*) AS violation_count FROM {{table}} WHERE NOT ({{column_a}} < {{column_b}})','{"threshold_min": 0}','{"column_a": "", "column_b": "", "table_name": ""}','CONSISTENCY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','CROSS_A_LE_B','字段A<=字段B一致性','检测字段A是否始终小于等于字段B','THRESHOLD','CROSS_FIELD','SELECT COUNT(*) AS violation_count FROM {{table}} WHERE NOT ({{column_a}} <= {{column_b}})','{"threshold_min": 0}','{"column_a": "", "column_b": "", "table_name": ""}','CONSISTENCY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL);
+INSERT INTO ry_bigdata_v1.dqc_rule_template (tenant_id,template_code,template_name,template_desc,rule_type,apply_level,default_expr,threshold_json,param_spec,dimension,builtin,enabled,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','CROSS_DATE_RANGE','日期范围一致性','检测开始日期是否在结束日期之前','THRESHOLD','CROSS_FIELD','SELECT COUNT(*) AS violation_count FROM {{table}} WHERE NOT ({{start_date}} <= {{end_date}})','{"threshold_min": 0}','{"end_date": "", "start_date": "", "table_name": ""}','CONSISTENCY','1','1','0',100,'1','2026-04-10 09:37:20','0','2026-04-10 17:51:28'),
+	 ('000000','CROSS_A_NE_B','字段A!=字段B一致性','检测两个字段值是否不相等','THRESHOLD','CROSS_FIELD','SELECT COUNT(*) AS violation_count FROM {{table}} WHERE {{column_a}} = {{column_b}}','{"threshold_min": 0}','{"column_a": "", "column_b": "", "table_name": ""}','CONSISTENCY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','CROSS_AMOUNT_QTY_PRICE','金额=数量*单价一致性','检测金额是否等于数量乘以单价','THRESHOLD','CROSS_FIELD','SELECT COUNT(*) AS violation_count FROM {{table}} WHERE NOT (ABS({{amount}} - {{quantity}} * {{unit_price}}) < 0.01)','{"threshold_min": 0}','{"amount": "", "quantity": "", "table_name": "", "unit_price": ""}','CONSISTENCY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','CROSS_DISCOUNT_RANGE','折扣率范围一致性','检测折扣率是否在0-1之间','THRESHOLD','CROSS_FIELD','SELECT COUNT(*) AS violation_count FROM {{table}} WHERE {{discount_rate}} < 0 OR {{discount_rate}} > 1','{"threshold_min": 0}','{"table_name": "", "discount_rate": ""}','VALIDITY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','CROSS_TBL_LOOKUP','跨表Lookup一致性','检测字段值是否在另一张表中存在','THRESHOLD','CROSS_TABLE','SELECT COUNT(*) AS lookup_violation FROM {{table}} t WHERE NOT EXISTS (SELECT 1 FROM {{lookup_table}} l WHERE l.{{lookup_column}} = t.{{column}})','{"threshold_min": 0}','{"column": "", "table_name": "", "lookup_table": "", "lookup_column": ""}','CONSISTENCY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','CROSS_TBL_SUM_MATCH','跨表汇总一致性','检测明细表汇总值是否等于汇总表值','THRESHOLD','CROSS_TABLE','SELECT ABS((SELECT COALESCE(SUM({{detail_column}}), 0) FROM {{detail_table}}) - (SELECT COALESCE(SUM({{summary_column}}), 0) FROM {{summary_table}})) AS sum_diff','{"threshold_min": 0}','{"detail_table": "", "detail_column": "", "summary_table": "", "summary_column": ""}','CONSISTENCY','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL),
+	 ('000000','CUSTOM_SQL','自定义SQL规则','用户自行编写SQL，规则引擎执行后比较返回单值','CUSTOM','TABLE','{{custom_sql}}','{}','{"custom_sql": ""}','CUSTOM','1','1','0',100,'1','2026-04-10 09:37:20','0',NULL);
+INSERT INTO ry_bigdata_v1.metadata_column (tenant_id,table_id,ds_id,table_name,column_name,column_alias,column_comment,data_type,is_nullable,column_key,default_value,is_primary_key,is_foreign_key,fk_reference,is_sensitive,sensitivity_level,sort_order,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000',2038856913555398712,2038582379342303234,'note_link','id',NULL,'','bigint','NO',NULL,NULL,1,NULL,NULL,NULL,NULL,1,'0',103,'1','2026-04-09 17:04:34','1','2026-04-09 17:05:05'),
+	 ('000000',2038856913555398712,2038582379342303234,'note_link','source_note_id',NULL,'源笔记（发出链接的笔记）','bigint','NO',NULL,NULL,0,NULL,NULL,NULL,NULL,2,'0',103,'1','2026-04-09 17:04:34','1','2026-04-09 17:05:05'),
+	 ('000000',2038856913555398712,2038582379342303234,'note_link','target_note_id',NULL,'目标笔记（被引用的笔记）','bigint','NO',NULL,NULL,0,NULL,NULL,NULL,NULL,3,'0',103,'1','2026-04-09 17:04:34','1','2026-04-09 17:05:05'),
+	 ('000000',2038856913555398712,2038582379342303234,'note_link','link_text',NULL,'链接显示文本（[[标题]] 中的标题）','varchar','YES',NULL,NULL,0,NULL,NULL,NULL,NULL,4,'0',103,'1','2026-04-09 17:04:34','1','2026-04-09 17:05:05'),
+	 ('000000',2038856913555398712,2038582379342303234,'note_link','created_at',NULL,'','datetime','YES',NULL,NULL,0,NULL,NULL,NULL,NULL,5,'0',103,'1','2026-04-09 17:04:34','1','2026-04-09 17:05:05'),
+	 ('000000',2038856913555398714,2038582379342303234,'chat_session','id',NULL,'','bigint','NO',NULL,NULL,1,NULL,NULL,NULL,NULL,1,'0',103,'1','2026-04-09 18:30:56','1','2026-04-09 18:32:49'),
+	 ('000000',2038856913555398714,2038582379342303234,'chat_session','user_id',NULL,'','bigint','NO',NULL,NULL,0,NULL,NULL,NULL,NULL,2,'0',103,'1','2026-04-09 18:30:56','1','2026-04-09 18:32:49'),
+	 ('000000',2038856913555398714,2038582379342303234,'chat_session','note_id',NULL,'关联的笔记ID','bigint','YES',NULL,NULL,0,NULL,NULL,NULL,NULL,3,'0',103,'1','2026-04-09 18:30:56','1','2026-04-09 18:32:49'),
+	 ('000000',2038856913555398714,2038582379342303234,'chat_session','title',NULL,'','varchar','YES',NULL,NULL,0,NULL,NULL,NULL,NULL,4,'0',103,'1','2026-04-09 18:30:56','1','2026-04-09 18:32:49'),
+	 ('000000',2038856913555398714,2038582379342303234,'chat_session','created_at',NULL,'','datetime','YES',NULL,NULL,0,NULL,NULL,NULL,NULL,5,'0',103,'1','2026-04-09 18:30:56','1','2026-04-09 18:32:49');
+INSERT INTO ry_bigdata_v1.metadata_scan_log (tenant_id,ds_id,ds_name,ds_code,scan_type,status,total_tables,success_count,partial_count,failed_count,error_detail,start_time,end_time,elapsed_ms,scan_user_id,remark,sensitive_matched,lineage_discovered,dqc_binded,mask_applied,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000',2038582379342303234,'Mysql_ods','MYSQL_20260401225335_5213','TABLES','FAILED',0,0,0,0,'
+### Error querying database.  Cause: cn.dev33.satoken.exception.SaTokenContextException: SaTokenContext 上下文尚未初始化
+### Cause: cn.dev33.satoken.exception.SaTokenContextException: SaTokenContext 上下文尚未初始化','2026-04-09 15:57:19','2026-04-09 15:57:19',NULL,1,NULL,NULL,NULL,NULL,NULL,103,'1','2026-04-09 15:57:19','-1','2026-04-09 15:57:19'),
+	 ('000000',2038582379342303234,'Mysql_ods','MYSQL_20260401225335_5213','TABLES','SUCCESS',1,1,0,0,NULL,'2026-04-09 17:04:34','2026-04-09 17:04:34',356,1,NULL,0,0,0,0,103,'1','2026-04-09 17:04:34','1','2026-04-09 17:04:34'),
+	 ('000000',2038582379342303234,'Mysql_ods','MYSQL_20260401225335_5213','TABLES','SUCCESS',1,1,0,0,NULL,'2026-04-09 17:05:05','2026-04-09 17:05:05',269,1,NULL,0,0,0,0,103,'1','2026-04-09 17:05:05','1','2026-04-09 17:05:05'),
+	 ('000000',2038582379342303234,'Mysql_ods','MYSQL_20260401225335_5213','TABLES','SUCCESS',1,1,0,0,NULL,'2026-04-09 18:30:55','2026-04-09 18:30:56',849,1,NULL,0,0,0,0,103,'1','2026-04-09 18:30:55','1','2026-04-09 18:30:56'),
+	 ('000000',2038582379342303234,'Mysql_ods','MYSQL_20260401225335_5213','TABLES','SUCCESS',1,1,0,0,NULL,'2026-04-09 18:32:48','2026-04-09 18:32:49',252,1,NULL,0,0,0,0,103,'1','2026-04-09 18:32:48','1','2026-04-09 18:32:49');
+INSERT INTO ry_bigdata_v1.metadata_table (tenant_id,ds_id,ds_name,ds_code,table_name,table_alias,table_comment,table_type,data_layer,data_domain,row_count,storage_bytes,source_update_time,sensitivity_level,owner_id,dept_id,catalog_id,tags,last_scan_time,status,del_flag,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000',2038582379342303234,'Mysql_ods','MYSQL_20260401225335_5213','note_link','测试','','TABLE','ODS',NULL,0,NULL,'2026-03-20 20:32:32',NULL,NULL,NULL,NULL,NULL,'2026-04-09 17:05:05','ACTIVE','0',103,'1','2026-04-09 17:04:34','1','2026-04-09 17:05:10'),
+	 ('000000',2038582379342303234,'Mysql_ods','MYSQL_20260401225335_5213','chat_session','CCC ','','TABLE','ODS','财务域',5,NULL,'2026-03-20 15:47:28','NORMAL',NULL,NULL,NULL,'','2026-04-09 18:32:48','ACTIVE','0',103,'1','2026-04-09 18:30:56','1','2026-04-09 19:06:25');
+INSERT INTO ry_bigdata_v1.sec_classification (tenant_id,create_dept,create_by,create_time,update_by,update_time,class_code,class_name,class_desc,sort_order,default_level_code,enabled,del_flag) VALUES
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'PERSONAL','个人信息','姓名、身份证号、手机号、邮箱等个人身份信息',1,'SENSITIVE','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'FINANCIAL','财务数据','收入、支出、利润、资产负债表等财务相关数据',2,'SENSITIVE','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'TRANSACTION','交易数据','订单、支付、交易记录等业务交易数据',3,'INNER','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'OPERATION','运营数据','业务运营指标、日志、报表等运营数据',4,'INNER','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'CUSTOMER','客户数据','客户信息、客户行为、客户画像等',5,'SENSITIVE','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'PRODUCT','产品数据','商品信息、库存、价格等产品和库存数据',6,'NORMAL','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'SUPPLIER','供应商数据','供应商信息、合同、采购数据',7,'INNER','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'INTERNAL','内部管理数据','员工信息、组织架构、权限配置等内部管理数据',8,'INNER','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'PUBLIC','公共数据','公开信息、参考数据、字典数据等',9,'NORMAL','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'AUDIT','日志审计数据','系统日志、操作审计、安全日志等',10,'INNER','1','0');
+INSERT INTO ry_bigdata_v1.sec_level (tenant_id,create_dept,create_by,create_time,update_by,update_time,level_code,level_name,level_value,level_desc,color,sort_order,enabled,del_flag) VALUES
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'NORMAL','一般数据',1,'公开可访问的数据，不涉及个人隐私或商业秘密','#909399',1,'1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'INNER','内部数据',2,'仅限企业内部使用，不可对外公开','#409EFF',2,'1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'SENSITIVE','敏感数据',3,'涉及个人隐私或商业秘密，需严格管控访问','#E6A23C',3,'1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'HIGHLY','高度敏感',4,'涉及核心机密，必须加密存储，访问需审批','#F56C6C',4,'1','0');
+INSERT INTO ry_bigdata_v1.sec_mask_template (tenant_id,create_dept,create_by,create_time,update_by,update_time,template_code,template_name,template_type,data_type,mask_type,mask_position,mask_char,mask_head_keep,mask_tail_keep,mask_pattern,sort_order,mask_expr,template_desc,builtin,enabled,del_flag) VALUES
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'PHONE_KEEP_HEAD3_TAIL4','手机号-保留前3后4','MASK',NULL,NULL,'CENTER','*',3,4,NULL,0,'','手机号138****5678，保留前3位和后4位，中间用*号遮蔽。适用于中国大陆11位手机号。','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'EMAIL_MASK','邮箱-部分遮蔽','MASK',NULL,NULL,'CENTER','*',2,NULL,NULL,0,'','邮箱脱敏，保留@前2个字符和域名，保留@后全部。如ab****@163.com','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'ID_CARD_MASK','身份证号-保留前3后4','MASK',NULL,NULL,'CENTER','*',3,4,NULL,0,'','身份证号脱敏，保留前3位和后4位，中间用*号遮蔽，如410***********1234','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'NAME_MASK','姓名-只保留姓氏','MASK',NULL,NULL,'HEAD','*',1,NULL,NULL,0,'','姓名脱敏，只保留第一个字符，其余用*遮蔽，如张*','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'BANK_CARD_MASK','银行卡号-保留后4位','MASK',NULL,NULL,'HEAD','*',0,4,NULL,0,'','银行卡号脱敏，只保留后4位，其余用*遮蔽，如**** **** **** 1234','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'PASSWORD_DELETE','密码-完全隐藏','DELETE',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,'','密码类字段直接删除，不返回任何内容','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'AMOUNT_ROUND','金额-四舍五入取整','MASK',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,'ROUND(${column}, 0)','金额字段四舍五入取整数，适用于金额统计展示场景','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'AMOUNT_KEEP_2_DECIMAL','金额-保留2位小数','MASK',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,'ROUND(${column}, 2)','金额保留2位小数，适用于精确金额展示','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'IP_MASK','IP地址-部分遮蔽','MASK',NULL,NULL,'TAIL','*',NULL,0,NULL,0,'','IP地址脱敏，只保留前两位，如192.***.***.***','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'ADDRESS_MASK','地址-保留省市','MASK',NULL,NULL,'TAIL','*',NULL,0,NULL,0,'','详细地址脱敏，只保留省市区信息，街道门牌号用*遮蔽','1','1','0');
+INSERT INTO ry_bigdata_v1.sec_mask_template (tenant_id,create_dept,create_by,create_time,update_by,update_time,template_code,template_name,template_type,data_type,mask_type,mask_position,mask_char,mask_head_keep,mask_tail_keep,mask_pattern,sort_order,mask_expr,template_desc,builtin,enabled,del_flag) VALUES
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'EMAIL_SHUFFLE','邮箱-前缀打乱','SHUFFLE',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,'','邮箱前缀字符打乱重排，保护用户标识同时保留格式','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'AES_ENCRYPT','AES加密','ENCRYPT',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,'AES_ENCRYPT(${column}, SHA2(''dataplatform_secret_key_2024'', 256))','使用AES算法对字段进行加密存储，适用于高敏感数据的加密存储场景','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'MD5_HASH','MD5哈希','ENCRYPT',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,'MD5(${column})','使用MD5对字段进行不可逆哈希，适用于需要对比但不需要还原的场景（如密码比对）','1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'CONSTANT_MASK','返回固定占位符','MASK',NULL,NULL,NULL,NULL,NULL,NULL,NULL,0,'''[已脱敏]''','直接返回脱敏占位符，不返回原始数据，适用于完全不可对外展示的字段','1','1','0');
+INSERT INTO ry_bigdata_v1.sec_sensitivity_rule (tenant_id,create_dept,create_by,create_time,update_by,update_time,rule_code,rule_name,description,rule_type,match_type,match_expr,match_expr_type,rule_expr,target_level_code,target_class_code,suggestion_action,suggestion_mask_pattern,suggestion_mask_type,priority,enabled,builtin,del_flag) VALUES
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_ID_CARD','身份证号识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["id_card","idcard","sfz","identity_card"]','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_PHONE','手机号识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["phone","mobile","tel","telephone","sjhm","shouji"]','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_EMAIL','邮箱识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["email","mail","yx","youxiang"]','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_NAME','姓名识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["name","username","xm","xingming","real_name","nickname"]','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_BANK_CARD','银行卡号识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["bank_card","card_no","card_number","yhkzh","bank_account"]','HIGHLY','FINANCIAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_PASSWORD','密码识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["password","pwd","passwd","secret","mima","miyao"]','HIGHLY','INTERNAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_SOCIAL_CARD','社保号识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["social_card","social_security","sbh","shebao"]','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_ADDRESS','地址识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["address","addr","dizhi","location","guapai"]','INNER','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_BIRTHDAY','出生日期识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["birthday","birth","birthday","csrq","csny","birth_date"]','INNER','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_SALARY','薪酬工资识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["salary","wage","pay","gongzi","salary_amount","salary_amt"]','SENSITIVE','FINANCIAL',NULL,NULL,NULL,100,'1','1','0');
+INSERT INTO ry_bigdata_v1.sec_sensitivity_rule (tenant_id,create_dept,create_by,create_time,update_by,update_time,rule_code,rule_name,description,rule_type,match_type,match_expr,match_expr_type,rule_expr,target_level_code,target_class_code,suggestion_action,suggestion_mask_pattern,suggestion_mask_type,priority,enabled,builtin,del_flag) VALUES
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_ORDER_AMOUNT','订单金额识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["amount","total_amount","order_amount","je","dingdanje"]','INNER','TRANSACTION',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_BALANCE','账户余额识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["balance","account_balance","yue","zhanghuye"]','SENSITIVE','FINANCIAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_IP_ADDRESS','IP地址识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["ip","ip_address","ip_addr","w_ip","dizhiip"]','INNER','AUDIT',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_PASSPORT','护照号识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["passport","huzhao","hz","passport_no"]','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_LICENSE_PLATE','车牌号识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["license_plate","plate","chepai","cph","car_plate"]','INNER','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_DRIVE_LICENSE','驾驶证号识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["drive_license","driver_license","jsz","jiashizheng"]','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_MARITAL','婚姻状态识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["marital","marriage","hyzk","hunyin"]','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_BIOMETRIC','生物特征识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["fingerprint","face","biometric","biometric_data","swtz"]','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_RELIGION','宗教信仰识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["religion","faith","zjx","religious"]','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_POLITICAL','政治面貌识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["political","political_status","zzmm","zhengzhi"]','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0');
+INSERT INTO ry_bigdata_v1.sec_sensitivity_rule (tenant_id,create_dept,create_by,create_time,update_by,update_time,rule_code,rule_name,description,rule_type,match_type,match_expr,match_expr_type,rule_expr,target_level_code,target_class_code,suggestion_action,suggestion_mask_pattern,suggestion_mask_type,priority,enabled,builtin,del_flag) VALUES
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_BLOOD_TYPE','血型识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["blood_type","blood","xx","xuexing","xue"]','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_CREDIT_SCORE','信用评分识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["credit_score","credit","xydf","xinyong"]','SENSITIVE','FINANCIAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'COL_MEDICAL_HISTORY','疾病史识别',NULL,'COLUMN_NAME',NULL,NULL,NULL,'["medical_history","diagnosis","illness","jb","jibing"]','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'DT_ID_CARD','数据类型-身份证号',NULL,'REGEX',NULL,NULL,NULL,'^[1-9]\\d{5}(18|19|20)\\d{2}(0[1-9]|1[0-2])(0[1-9]|[12]\\d|3[01])\\d{3}[\\dXx]$','HIGHLY','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'DT_PHONE_MOBILE','数据类型-手机号',NULL,'REGEX',NULL,NULL,NULL,'^(1[3-9]\\d{9})$','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0'),
+	 ('000000',100,'1','2026-04-10 09:37:19','0',NULL,'DT_EMAIL','数据类型-邮箱',NULL,'REGEX',NULL,NULL,NULL,'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\\.[a-zA-Z]{2,}$','SENSITIVE','PERSONAL',NULL,NULL,NULL,100,'1','1','0');
+INSERT INTO ry_bigdata_v1.sys_datasource (tenant_id,ds_name,ds_code,ds_type,host,port,database_name,schema_name,username,password,connection_params,data_layer,data_source,ds_flag,dept_id,status,del_flag,remark,create_dept,create_by,create_time,update_by,update_time) VALUES
+	 ('000000','Mysql_ods','MYSQL_20260401225335_5213','MYSQL','49.232.153.150',3366,'biji_db',NULL,'root','sdfwer@re3f',NULL,'ODS','K3DC','0',1,'0','0','',103,1,'2026-03-30 19:41:29',1,'2026-04-10 10:05:47');

@@ -1,6 +1,8 @@
 package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -17,8 +19,6 @@ import org.dromara.metadata.mapper.GovGlossaryMappingMapper;
 import org.dromara.metadata.service.IGovGlossaryMappingService;
 import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 
 /**
@@ -27,6 +27,7 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class GovGlossaryMappingServiceImpl implements IGovGlossaryMappingService {
 
     private final GovGlossaryMappingMapper baseMapper;
@@ -117,7 +118,7 @@ public class GovGlossaryMappingServiceImpl implements IGovGlossaryMappingService
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int batchInsert(List<GovGlossaryMapping> mappings) {
         if (mappings == null || mappings.isEmpty()) {
             return 0;

@@ -1,6 +1,10 @@
 package org.dromara.metadata.service.impl;
 
+import cn.hutool.core.bean.copier.CopyOptions;
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
+import com.baomidou.dynamic.datasource.toolkit.DynamicDataSourceContextHolder;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -22,10 +26,10 @@ import org.dromara.metadata.service.IDqcExecutionService;
 import org.dromara.metadata.service.IDqcPlanService;
 import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.math.BigDecimal;
 import java.util.List;
+import java.util.function.Supplier;
 
 /**
  * 数据质量检查方案服务实现
@@ -33,7 +37,10 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DqcPlanServiceImpl implements IDqcPlanService {
+
+    private static final String BIGDATA_DS = "bigdata";
 
     private final DqcPlanMapper baseMapper;
     private final DqcPlanRuleMapper planRuleMapper;
@@ -53,7 +60,10 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
 
     @Override
     public DqcPlanVo getPlanById(Long id) {
-        DqcPlanVo vo = baseMapper.selectVoById(id);
+        DqcPlanVo vo = executeOnBigdata(() -> {
+            DqcPlan entity = baseMapper.selectById(id);
+            return entity == null ? null : MapstructUtils.convert(entity, DqcPlanVo.class);
+        });
         if (vo != null) {
             formatVo(vo);
         }
@@ -62,21 +72,39 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
 
     @Override
     public Long insertPlan(DqcPlanBo bo) {
-        DqcPlan entity = MapstructUtils.convert(bo, DqcPlan.class);
-        if (entity.getStatus() == null) {
-            entity.setStatus("DRAFT");
-        }
-        if (entity.getTriggerType() == null) {
-            entity.setTriggerType("MANUAL");
-        }
-        baseMapper.insert(entity);
-        return entity.getId();
+        return executeOnBigdata(() -> {
+            DqcPlan entity = MapstructUtils.convert(bo, DqcPlan.class);
+            if (entity.getStatus() == null) {
+                entity.setStatus("DRAFT");
+            }
+            if (entity.getTriggerType() == null) {
+                entity.setTriggerType("MANUAL");
+            }
+            baseMapper.insert(entity);
+            return entity.getId();
+        });
     }
 
     @Override
     public int updatePlan(DqcPlanBo bo) {
-        DqcPlan entity = MapstructUtils.convert(bo, DqcPlan.class);
-        return baseMapper.updateById(entity);
+        return executeOnBigdata(() -> {
+            DqcPlan existing = baseMapper.selectById(bo.getId());
+            if (existing == null) {
+                throw new ServiceException("方案不存在或无权操作");
+            }
+            // 暂存原状态，编辑时前端不传 status 字段（保持原状态不变）
+            String originalStatus = existing.getStatus();
+            cn.hutool.core.bean.BeanUtil.copyProperties(
+                bo,
+                existing,
+                CopyOptions.create().ignoreNullValue()
+            );
+            // 如果传入的 status 为空，则保持原状态
+            if (StringUtils.isBlank(bo.getStatus())) {
+                existing.setStatus(originalStatus);
+            }
+            return baseMapper.updateById(existing);
+        });
     }
 
     @Override
@@ -93,36 +121,39 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DS("bigdata")
+    @DSTransactional
     public int bindRules(Long planId, List<DqcPlanRuleBindBo> ruleBindings) {
-        requireAccessiblePlan(planId);
-        // 先删除旧关联
-        planRuleMapper.delete(
-            Wrappers.<DqcPlanRule>lambdaQuery()
-                .eq(DqcPlanRule::getPlanId, planId)
-        );
+        return executeOnBigdata(() -> {
+            requireAccessiblePlan(planId);
+            // 先删除旧关联
+            planRuleMapper.delete(
+                Wrappers.<DqcPlanRule>lambdaQuery()
+                    .eq(DqcPlanRule::getPlanId, planId)
+            );
 
-        // 新增新关联
-        for (DqcPlanRuleBindBo binding : ruleBindings) {
-            DqcPlanRule planRule = new DqcPlanRule();
-            planRule.setPlanId(planId);
-            planRule.setRuleId(binding.getRuleId());
-            planRule.setTargetTable(binding.getTargetTable());
-            planRule.setTargetColumn(binding.getTargetColumn());
-            planRule.setSortOrder(binding.getRuleOrder() != null ? binding.getRuleOrder() : 1);
-            planRule.setEnabled(binding.getEnabled() != null ? binding.getEnabled() : true);
-            planRule.setSkipOnFailure(binding.getSkipOnFailure() != null ? binding.getSkipOnFailure() : false);
-            planRuleMapper.insert(planRule);
-        }
+            // 新增新关联
+            for (DqcPlanRuleBindBo binding : ruleBindings) {
+                DqcPlanRule planRule = new DqcPlanRule();
+                planRule.setPlanId(planId);
+                planRule.setRuleId(binding.getRuleId());
+                planRule.setTargetTable(binding.getTargetTable());
+                planRule.setTargetColumn(binding.getTargetColumn());
+                planRule.setSortOrder(binding.getRuleOrder() != null ? binding.getRuleOrder() : 1);
+                planRule.setEnabled(binding.getEnabled() != null ? binding.getEnabled() : true);
+                planRule.setSkipOnFailure(binding.getSkipOnFailure() != null ? binding.getSkipOnFailure() : false);
+                planRuleMapper.insert(planRule);
+            }
 
-        // 更新方案规则数量
-        DqcPlan plan = baseMapper.selectById(planId);
-        if (plan != null) {
-            plan.setRuleCount(ruleBindings.size());
-            baseMapper.updateById(plan);
-        }
+            // 更新方案规则数量
+            DqcPlan plan = baseMapper.selectById(planId);
+            if (plan != null) {
+                plan.setRuleCount(ruleBindings.size());
+                baseMapper.updateById(plan);
+            }
 
-        return ruleBindings.size();
+            return ruleBindings.size();
+        });
     }
 
     @Override
@@ -202,10 +233,22 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
     @Override
     public int publish(Long id) {
         DqcPlan plan = requireAccessiblePlan(id);
-        if (!"DRAFT".equals(plan.getStatus()) && !"UNPUBLISHED".equals(plan.getStatus())) {
-            throw new ServiceException("只能发布草稿状态的方案");
+        if (!"DRAFT".equals(plan.getStatus())
+            && !"UNPUBLISHED".equals(plan.getStatus())
+            && !"DISABLED".equals(plan.getStatus())) {
+            throw new ServiceException("只能发布草稿、待发布或已停用状态的方案");
         }
         plan.setStatus("PUBLISHED");
+        return baseMapper.updateById(plan);
+    }
+
+    @Override
+    public int disable(Long id) {
+        DqcPlan plan = requireAccessiblePlan(id);
+        if (!"PUBLISHED".equals(plan.getStatus())) {
+            throw new ServiceException("只能停用已发布状态的方案");
+        }
+        plan.setStatus("DISABLED");
         return baseMapper.updateById(plan);
     }
 
@@ -227,11 +270,7 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
 
     @Override
     public List<DqcPlanRule> getBoundRules(Long planId) {
-        return planRuleMapper.selectList(
-            Wrappers.<DqcPlanRule>lambdaQuery()
-                .eq(DqcPlanRule::getPlanId, planId)
-                .orderByAsc(DqcPlanRule::getSortOrder)
-        );
+        return executeOnBigdata(() -> planRuleMapper.selectCompatibleByPlanId(planId));
     }
 
     @Override
@@ -257,7 +296,7 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
         if (planId == null) {
             throw new ServiceException("方案ID不能为空");
         }
-        DqcPlan plan = baseMapper.selectById(planId);
+        DqcPlan plan = executeOnBigdata(() -> baseMapper.selectById(planId));
         if (plan == null) {
             throw new ServiceException("方案不存在: " + planId);
         }
@@ -265,10 +304,7 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
         if (accessibleDsIds.isEmpty()) {
             throw new ServiceException("无权操作该方案: " + planId);
         }
-        var planRules = planRuleMapper.selectList(
-            Wrappers.<DqcPlanRule>lambdaQuery()
-                .eq(DqcPlanRule::getPlanId, planId)
-        );
+        var planRules = executeOnBigdata(() -> planRuleMapper.selectCompatibleByPlanId(planId));
         if (planRules.isEmpty()) {
             // 无关联规则时，用户只需有任意数据源访问权限即可操作方案
             return plan;
@@ -276,5 +312,14 @@ public class DqcPlanServiceImpl implements IDqcPlanService {
         // 有关联规则时，需要至少有一个规则指向用户可访问的数据源
         // 细粒度校验由 DqcRuleDefServiceImpl 的 requireAccessibleRule 保证
         return plan;
+    }
+
+    private <T> T executeOnBigdata(Supplier<T> supplier) {
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            return supplier.get();
+        } finally {
+            DynamicDataSourceContextHolder.poll();
+        }
     }
 }

@@ -212,11 +212,13 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
+          checked-value="1"
+          un-checked-value="0"
           :api="
             () =>
               secMaskTemplateUpdate({
                 id: row.id,
-                enabled: row.enabled === '0' ? '1' : '0',
+                enabled: row.enabled === '1' ? '0' : '1',
               })
           "
           @reload="tableApi.query()"

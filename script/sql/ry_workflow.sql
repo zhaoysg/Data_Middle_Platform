@@ -312,6 +312,161 @@ insert into sys_menu VALUES ('11641', '请假申请修改', '11638', 3, '#', '',
 insert into sys_menu VALUES ('11642', '请假申请删除', '11638', 4, '#', '', '', 1, 0, 'F', '0', '0', 'workflow:leave:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
 insert into sys_menu VALUES ('11643', '请假申请导出', '11638', 5, '#', '', '', 1, 0, 'F', '0', '0', 'workflow:leave:export', '#', 103, 1, sysdate(), NULL, NULL, '');
 
+-- ----------------------------
+-- 数据中台菜单
+-- ----------------------------
+delete from sys_menu where menu_id between 12000 and 12699;
+
+insert into sys_menu values ('12000', '数据中台', '0', '8', 'metadata', '', '', '1', '0', 'M', '0', '0', '', 'dashboard', 103, 1, sysdate(), NULL, NULL, '数据中台一级菜单');
+
+-- 数据资产
+insert into sys_menu values ('12100', '数据资产', '12000', '1', 'metadataAsset', '', '', '1', '0', 'M', '0', '0', '', 'table', 103, 1, sysdate(), NULL, NULL, '数据资产分组');
+insert into sys_menu values ('12101', '资产目录', '12100', '1', 'metadataCatalog', 'metadata/catalog/index', '', '1', '1', 'C', '0', '0', 'metadata:catalog:list', 'tree', 103, 1, sysdate(), NULL, NULL, '资产目录管理');
+insert into sys_menu values ('12102', '元数据表', '12100', '2', 'metadataTable', 'metadata/table/index', '', '1', '1', 'C', '0', '0', 'metadata:table:list', 'form', 103, 1, sysdate(), NULL, NULL, '元数据表管理');
+insert into sys_menu values ('12103', '数仓分层', '12100', '3', 'metadataLayer', 'metadata/layer/index', '', '1', '1', 'C', '0', '0', 'metadata:layer:list', 'tree-table', 103, 1, sysdate(), NULL, NULL, '数仓分层管理');
+insert into sys_menu values ('12104', '数据域管理', '12100', '4', 'metadataDomain', 'metadata/domain/index', '', '1', '1', 'C', '0', '0', 'metadata:domain:list', 'category', 103, 1, sysdate(), NULL, NULL, '数据域管理');
+insert into sys_menu values ('12111', '资产目录查询', '12101', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:catalog:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12112', '资产目录新增', '12101', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:catalog:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12113', '资产目录修改', '12101', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:catalog:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12114', '资产目录删除', '12101', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:catalog:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12115', '资产目录导出', '12101', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:catalog:export', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12121', '元数据表查询', '12102', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:table:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12122', '元数据表修改', '12102', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:table:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12123', '元数据表删除', '12102', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:table:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12124', '元数据表导出', '12102', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:table:export', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12125', '元数据表批量治理', '12102', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:table:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12131', '数仓分层查询', '12103', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:layer:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12132', '数仓分层新增', '12103', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:layer:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12133', '数仓分层修改', '12103', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:layer:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12134', '数仓分层删除', '12103', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:layer:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12135', '数仓分层导出', '12103', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:layer:export', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12141', '数据域查询', '12104', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:domain:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12142', '数据域新增', '12104', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:domain:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12143', '数据域修改', '12104', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:domain:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12144', '数据域删除', '12104', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:domain:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12145', '数据域导出', '12104', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:domain:export', '#', 103, 1, sysdate(), NULL, NULL, '');
+
+-- 数据探查
+insert into sys_menu values ('12200', '数据探查', '12000', '2', 'metadataProfile', '', '', '1', '0', 'M', '0', '0', '', 'search', 103, 1, sysdate(), NULL, NULL, '数据探查分组');
+insert into sys_menu values ('12201', '元数据采集', '12200', '1', 'metadataScan', 'metadata/scan/index', '', '1', '1', 'C', '0', '0', 'metadata:scan:list', 'job', 103, 1, sysdate(), NULL, NULL, '元数据采集');
+insert into sys_menu values ('12202', '采集任务', '12200', '2', 'metadataSchedule', 'metadata/scan-schedule/index', '', '1', '1', 'C', '0', '0', 'metadata:schedule:list', 'date', 103, 1, sysdate(), NULL, NULL, '元数据采集调度');
+insert into sys_menu values ('12203', '画像任务', '12200', '3', 'metadataProfileTask', 'metadata/dprofile/task/index', '', '1', '1', 'C', '0', '0', '', 'clipboard', 103, 1, sysdate(), NULL, NULL, '数据画像任务');
+insert into sys_menu values ('12204', '探查报告', '12200', '4', 'metadataProfileReport', 'metadata/dprofile/report/index', '', '1', '1', 'C', '0', '0', '', 'education', 103, 1, sysdate(), NULL, NULL, '数据探查报告');
+insert into sys_menu values ('12211', '元数据采集查询', '12201', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:scan:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12212', '元数据采集执行', '12201', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:scan:exec', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12221', '采集任务查询', '12202', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:schedule:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12222', '采集任务新增', '12202', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:schedule:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12223', '采集任务修改', '12202', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:schedule:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12224', '采集任务删除', '12202', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:schedule:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12225', '采集任务执行', '12202', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:schedule:exec', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12231', '画像任务查询', '12203', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:task:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12232', '画像任务新增', '12203', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:task:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12233', '画像任务修改', '12203', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:task:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12234', '画像任务删除', '12203', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:task:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12235', '画像任务启动', '12203', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:task:start', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12236', '画像任务停止', '12203', '6', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:task:stop', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12237', '画像任务执行', '12203', '7', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:task:run', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12241', '探查报告查询', '12204', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dprofile:report:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+
+-- 数据质量
+insert into sys_menu values ('12300', '数据质量', '12000', '3', 'metadataQuality', '', '', '1', '0', 'M', '0', '0', '', 'chart', 103, 1, sysdate(), NULL, NULL, '数据质量分组');
+insert into sys_menu values ('12301', '质量总览', '12300', '1', 'metadataDqcDashboard', 'metadata/dqc/dashboard/index', '', '1', '1', 'C', '0', '0', 'metadata:dqc:score:list', 'dashboard', 103, 1, sysdate(), NULL, NULL, '数据质量总览');
+insert into sys_menu values ('12302', '规则模板', '12300', '2', 'metadataDqcTemplate', 'metadata/dqc/template/index', '', '1', '1', 'C', '0', '0', 'metadata:dqc:template:list', 'build', 103, 1, sysdate(), NULL, NULL, '质量规则模板');
+insert into sys_menu values ('12303', '质量规则', '12300', '3', 'metadataDqcRule', 'metadata/dqc/rule/index', '', '1', '1', 'C', '0', '0', 'metadata:dqc:rule:list', 'edit', 103, 1, sysdate(), NULL, NULL, '质量规则定义');
+insert into sys_menu values ('12304', '质量计划', '12300', '4', 'metadataDqcPlan', 'metadata/dqc/plan/index', '', '1', '1', 'C', '0', '0', 'metadata:dqc:plan:list', 'clipboard', 103, 1, sysdate(), NULL, NULL, '质量检测计划');
+insert into sys_menu values ('12305', '执行记录', '12300', '5', 'metadataDqcExecution', 'metadata/dqc/execution/index', '', '1', '1', 'C', '0', '0', 'metadata:dqc:execution:list', 'history', 103, 1, sysdate(), NULL, NULL, '质量执行记录');
+insert into sys_menu values ('12311', '质量总览查询', '12301', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:score:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12312', '质量总览导出', '12301', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:score:export', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12321', '规则模板查询', '12302', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:template:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12322', '规则模板新增', '12302', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:template:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12323', '规则模板修改', '12302', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:template:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12324', '规则模板删除', '12302', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:template:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12331', '质量规则查询', '12303', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:rule:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12332', '质量规则新增', '12303', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:rule:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12333', '质量规则修改', '12303', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:rule:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12334', '质量规则删除', '12303', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:rule:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12341', '质量计划查询', '12304', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:plan:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12342', '质量计划新增', '12304', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:plan:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12343', '质量计划修改', '12304', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:plan:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12344', '质量计划删除', '12304', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:plan:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12345', '质量计划执行', '12304', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:plan:exec', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12346', '质量计划发布', '12304', '6', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:plan:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12347', '质量计划停用', '12304', '7', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:plan:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12351', '执行记录查询', '12305', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:execution:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12352', '执行明细查看', '12305', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:execution:detail', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12353', '执行记录停止', '12305', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:execution:stop', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12354', '执行记录重跑', '12305', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:dqc:execution:rerun', '#', 103, 1, sysdate(), NULL, NULL, '');
+
+-- 数据安全
+insert into sys_menu values ('12400', '数据安全', '12000', '4', 'metadataSecurity', '', '', '1', '0', 'M', '0', '0', '', 'lock', 103, 1, sysdate(), NULL, NULL, '数据安全分组');
+insert into sys_menu values ('12401', '分类管理', '12400', '1', 'metadataSecurityClassification', 'metadata/security/classification/index', '', '1', '1', 'C', '0', '0', 'metadata:security:classification:list', 'nested', 103, 1, sysdate(), NULL, NULL, '数据分类管理');
+insert into sys_menu values ('12402', '分级管理', '12400', '2', 'metadataSecurityLevel', 'metadata/security/level/index', '', '1', '1', 'C', '0', '0', 'metadata:security:level:list', 'number', 103, 1, sysdate(), NULL, NULL, '敏感等级管理');
+insert into sys_menu values ('12403', '敏感识别规则', '12400', '3', 'metadataSecurityRules', 'metadata/security/rules/index', '', '1', '1', 'C', '0', '0', 'metadata:security:rules:list', 'skill', 103, 1, sysdate(), NULL, NULL, '敏感识别规则');
+insert into sys_menu values ('12404', '敏感字段台账', '12400', '4', 'metadataSecuritySensitivity', 'metadata/security/sensitivity/index', '', '1', '1', 'C', '0', '0', 'metadata:security:sensitivity:list', 'validCode', 103, 1, sysdate(), NULL, NULL, '敏感字段台账');
+insert into sys_menu values ('12405', '脱敏模板', '12400', '5', 'metadataSecurityMaskTemplate', 'metadata/security/mask-template/index', '', '1', '1', 'C', '0', '0', 'metadata:security:maskTemplate:list', 'example', 103, 1, sysdate(), NULL, NULL, '脱敏模板');
+insert into sys_menu values ('12406', '脱敏策略', '12400', '6', 'metadataSecurityStrategy', 'metadata/security/strategy/index', '', '1', '1', 'C', '0', '0', 'metadata:security:strategy:list', 'guide', 103, 1, sysdate(), NULL, NULL, '脱敏策略');
+insert into sys_menu values ('12407', '脱敏查询', '12400', '7', 'metadataSecurityMaskQuery', 'metadata/security/mask-query/index', '', '1', '1', 'C', '0', '0', '', 'search', 103, 1, sysdate(), NULL, NULL, '脱敏查询');
+insert into sys_menu values ('12408', '访问日志', '12400', '8', 'metadataSecurityAccessLog', 'metadata/security/access-log/index', '', '1', '1', 'C', '0', '0', 'metadata:security:accessLog:list', 'form', 103, 1, sysdate(), NULL, NULL, '访问日志');
+insert into sys_menu values ('12409', '安全审计', '12400', '9', 'metadataSecurityAudit', 'metadata/security/audit/index', '', '1', '1', 'C', '0', '0', '', 'monitor', 103, 1, sysdate(), NULL, NULL, '安全审计');
+insert into sys_menu values ('12411', '分类管理查询', '12401', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:classification:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12412', '分类管理新增', '12401', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:classification:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12413', '分类管理修改', '12401', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:classification:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12414', '分类管理删除', '12401', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:classification:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12421', '分级管理查询', '12402', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:level:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12422', '分级管理新增', '12402', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:level:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12423', '分级管理修改', '12402', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:level:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12424', '分级管理删除', '12402', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:level:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12431', '敏感规则查询', '12403', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:rules:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12432', '敏感规则新增', '12403', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:rules:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12433', '敏感规则修改', '12403', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:rules:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12434', '敏感规则删除', '12403', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:rules:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12441', '敏感台账查询', '12404', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:sensitivity:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12442', '敏感台账新增', '12404', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:sensitivity:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12443', '敏感台账修改', '12404', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:sensitivity:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12444', '敏感台账删除', '12404', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:sensitivity:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12445', '敏感字段扫描', '12404', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:sensitivity:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12446', '敏感字段确认', '12404', '6', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:sensitivity:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12451', '脱敏模板查询', '12405', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:maskTemplate:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12452', '脱敏模板新增', '12405', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:maskTemplate:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12453', '脱敏模板修改', '12405', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:maskTemplate:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12454', '脱敏模板删除', '12405', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:maskTemplate:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12461', '脱敏策略查询', '12406', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:strategy:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12462', '脱敏策略新增', '12406', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:strategy:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12463', '脱敏策略修改', '12406', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:strategy:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12464', '脱敏策略删除', '12406', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:strategy:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12471', '脱敏查询查看', '12407', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:maskQuery:list', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12481', '访问日志查询', '12408', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:accessLog:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12491', '安全审计查看', '12409', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:security:audit:list', '#', 103, 1, sysdate(), NULL, NULL, '');
+
+-- 血缘探查
+insert into sys_menu values ('12500', '血缘探查', '12000', '5', 'metadataLineage', '', '', '1', '0', 'M', '0', '0', '', 'share', 103, 1, sysdate(), NULL, NULL, '血缘探查分组');
+insert into sys_menu values ('12501', '血缘总览', '12500', '1', 'metadataLineageList', 'metadata/lineage/index', '', '1', '1', 'C', '0', '0', 'metadata:lineage:list', 'link', 103, 1, sysdate(), NULL, NULL, '血缘关系管理');
+insert into sys_menu values ('12502', '血缘图谱', '12500', '2', 'metadataLineageGraph', 'metadata/lineage/graph/index', '', '1', '1', 'C', '0', '0', 'metadata:lineage:view', 'tree', 103, 1, sysdate(), NULL, NULL, '血缘图谱查看');
+insert into sys_menu values ('12511', '血缘关系查询', '12501', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:lineage:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12512', '血缘关系新增', '12501', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:lineage:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12513', '血缘关系修改', '12501', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:lineage:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12514', '血缘关系删除', '12501', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:lineage:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12515', '血缘图谱查看', '12501', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:lineage:view', '#', 103, 1, sysdate(), NULL, NULL, '');
+
+-- 标准治理
+insert into sys_menu values ('12600', '标准治理', '12000', '6', 'metadataGovernance', '', '', '1', '0', 'M', '0', '0', '', 'dict', 103, 1, sysdate(), NULL, NULL, '标准治理分组');
+insert into sys_menu values ('12601', '术语分类', '12600', '1', 'metadataGlossaryCategory', 'metadata/glossary/category/index', '', '1', '1', 'C', '0', '0', 'metadata:glossary:category:list', 'nested', 103, 1, sysdate(), NULL, NULL, '术语分类管理');
+insert into sys_menu values ('12602', '业务术语', '12600', '2', 'metadataGlossaryTerm', 'metadata/glossary/term/index', '', '1', '1', 'C', '0', '0', 'metadata:glossary:term:list', 'documentation', 103, 1, sysdate(), NULL, NULL, '业务术语管理');
+insert into sys_menu values ('12603', '术语映射', '12600', '3', 'metadataGlossaryMapping', 'metadata/glossary/mapping/index', '', '1', '1', 'C', '0', '0', 'metadata:glossary:mapping:list', 'mapping', 103, 1, sysdate(), NULL, NULL, '术语映射管理');
+insert into sys_menu values ('12611', '术语分类查询', '12601', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:category:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12612', '术语分类新增', '12601', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:category:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12613', '术语分类修改', '12601', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:category:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12614', '术语分类删除', '12601', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:category:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12621', '业务术语查询', '12602', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:term:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12622', '业务术语新增', '12602', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:term:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12623', '业务术语修改', '12602', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:term:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12624', '业务术语删除', '12602', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:term:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12625', '业务术语发布', '12602', '5', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:term:publish', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12631', '术语映射查询', '12603', '1', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:mapping:query', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12632', '术语映射新增', '12603', '2', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:mapping:add', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12633', '术语映射修改', '12603', '3', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:mapping:edit', '#', 103, 1, sysdate(), NULL, NULL, '');
+insert into sys_menu values ('12634', '术语映射删除', '12603', '4', '#', '', '', '1', '0', 'F', '0', '0', 'metadata:glossary:mapping:remove', '#', 103, 1, sysdate(), NULL, NULL, '');
+
 INSERT INTO sys_dict_type VALUES (13, '000000', '业务状态', 'wf_business_status', 103, 1, sysdate(), NULL, NULL, '业务状态列表');
 INSERT INTO sys_dict_type VALUES (14, '000000', '表单类型', 'wf_form_type', 103, 1, sysdate(), NULL, NULL, '表单类型列表');
 INSERT INTO sys_dict_type VALUES (15, '000000', '任务状态', 'wf_task_status', 103, 1, sysdate(), NULL, NULL, '任务状态');

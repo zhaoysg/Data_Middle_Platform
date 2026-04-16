@@ -47,7 +47,6 @@ const gridOptions: VxeGridProps = {
     {
       title: '等级描述',
       field: 'levelDesc',
-      width: 280,
       minWidth: 200,
       showOverflow: 'tooltip',
     },
@@ -145,7 +144,9 @@ async function handleMultiDelete() {
       <template #enabled="{ row }">
         <TableSwitch
           v-model:value="row.enabled"
-          :api="() => secLevelUpdate({ id: row.id, enabled: row.enabled === '0' ? '1' : '0' })"
+          checked-value="1"
+          un-checked-value="0"
+          :api="() => secLevelUpdate({ id: row.id, enabled: row.enabled === '1' ? '0' : '1' })"
           @reload="tableApi.query()"
         />
       </template>

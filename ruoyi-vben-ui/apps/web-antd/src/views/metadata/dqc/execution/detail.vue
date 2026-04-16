@@ -107,6 +107,7 @@ const detailGridOptions: VxeGridProps = {
   pagerConfig: { enabled: true },
   rowConfig: { keyField: 'id' },
   id: 'dqc-execution-detail-grid',
+  data: [],
 };
 
 const [DetailTable, detailTableApi] = useVbenVxeGrid({ gridOptions: detailGridOptions });
@@ -119,9 +120,11 @@ const failedRules = ref<any[]>([]);
 async function loadData() {
   if (executionId.value) {
     try {
-      executionInfo.value = await dqcExecutionInfo(executionId.value);
+      const info = await dqcExecutionInfo(executionId.value);
+      executionInfo.value = info || {};
       const details = await dqcExecutionDetails(executionId.value);
-      detailTableApi.loadData({ rows: details || [], total: (details || []).length });
+      const rows = Array.isArray(details) ? details : [];
+      detailTableApi.grid?.loadData(rows);
     } finally {
       loading.value = false;
     }
@@ -149,7 +152,8 @@ function stopPolling() {
 }
 
 function openStepsModal() {
-  stepsDetails.value = (detailTableApi.grid?.getData() || []).map((row: any) => ({
+  const allData = detailTableApi.grid?.getData() ?? [];
+  stepsDetails.value = allData.map((row: any) => ({
     id: row.id,
     ruleName: row.ruleName,
     status: row.passFlag === '1' ? 'SUCCESS' : row.passFlag === '0' ? 'FAILED' : 'PENDING',
@@ -161,7 +165,7 @@ function openStepsModal() {
 }
 
 function openFailedModal() {
-  const allData = detailTableApi.grid?.getData() || [];
+  const allData = detailTableApi.grid?.getData() ?? [];
   failedRules.value = allData.filter((row: any) => row.passFlag === '0');
   failedModalVisible.value = true;
 }
@@ -226,15 +230,15 @@ onUnmounted(() => {
               <span class="text-sm text-gray-600">{{ dim.label }}</span>
               <span
                 class="text-sm font-semibold"
-                :style="{ color: getScoreColor(executionInfo[dim.key]) }"
+                :style="{ color: getScoreColor(executionInfo?.[dim.key]) }"
               >
-                {{ executionInfo[dim.key] !== undefined ? `${executionInfo[dim.key]}分` : '-' }}
+                {{ executionInfo?.[dim.key] !== undefined ? `${executionInfo[dim.key]}分` : '-' }}
               </span>
             </div>
             <Progress
-              :percent="executionInfo[dim.key] || 0"
-              :status="getScoreStatus(executionInfo[dim.key])"
-              :stroke-color="getScoreColor(executionInfo[dim.key])"
+              :percent="executionInfo?.[dim.key] || 0"
+              :status="getScoreStatus(executionInfo?.[dim.key])"
+              :stroke-color="getScoreColor(executionInfo?.[dim.key])"
               :show-info="false"
               size="small"
             />
@@ -259,7 +263,18 @@ onUnmounted(() => {
       </Card>
 
       <Card title="执行明细">
-        <DetailTable />
+        <DetailTable>
+          <template #dimension="{ row }">
+            <Tag :color="dimensionColorMap[row.dimension || '']">
+              {{ dimensionLabelMap[row.dimension || ''] || row.dimension || '-' }}
+            </Tag>
+          </template>
+          <template #passFlag="{ row }">
+            <Tag :color="row.passFlag === '1' ? 'success' : 'error'">
+              {{ row.passFlag === '1' ? '通过' : '失败' }}
+            </Tag>
+          </template>
+        </DetailTable>
       </Card>
     </Space>
 
@@ -331,17 +346,5 @@ onUnmounted(() => {
         </div>
       </div>
     </Modal>
-
-    <template #dimension="{ row }">
-      <Tag :color="dimensionColorMap[row.dimension || '']">
-        {{ dimensionLabelMap[row.dimension || ''] || row.dimension || '-' }}
-      </Tag>
-    </template>
-
-    <template #passFlag="{ row }">
-      <Tag :color="row.passFlag === '1' ? 'success' : 'error'">
-        {{ row.passFlag === '1' ? '通过' : '失败' }}
-      </Tag>
-    </template>
   </Page>
 </template>

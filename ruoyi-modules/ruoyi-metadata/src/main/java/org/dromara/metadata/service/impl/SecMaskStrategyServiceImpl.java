@@ -1,6 +1,8 @@
 package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.collection.CollUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
@@ -22,8 +24,6 @@ import org.dromara.metadata.mapper.MetadataColumnMapper;
 import org.dromara.metadata.service.ISecMaskStrategyService;
 import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
@@ -34,6 +34,7 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
 
     private final SecMaskStrategyMapper strategyMapper;
@@ -93,7 +94,7 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public Long insertWithDetails(SecMaskStrategyBo bo) {
         datasourceHelper.getSysDatasource(bo.getDsId());
         if (StringUtils.isNotBlank(bo.getStrategyCode())) {
@@ -131,7 +132,7 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int updateWithDetails(SecMaskStrategyBo bo) {
         if (bo.getId() == null) {
             throw new ServiceException("策略ID不能为空");
@@ -178,7 +179,7 @@ public class SecMaskStrategyServiceImpl implements ISecMaskStrategyService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteByIds(Long[] ids) {
         for (Long id : ids) {
             requireAccessibleStrategy(id);

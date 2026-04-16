@@ -84,9 +84,19 @@ public class DqcPlanController extends BaseController {
      */
     @SaCheckPermission("metadata:dqc:plan:edit")
     @Log(title = "数据质量检测方案-发布")
-    @PostMapping("/publish/{id}")
+    @PostMapping({"/publish/{id}", "/{id}/publish"})
     public R<Void> publish(@PathVariable Long id) {
         return toAjax(planService.publish(id));
+    }
+
+    /**
+     * 停用方案
+     */
+    @SaCheckPermission("metadata:dqc:plan:edit")
+    @Log(title = "数据质量检测方案-停用")
+    @PostMapping({"/disable/{id}", "/{id}/disable"})
+    public R<Void> disable(@PathVariable Long id) {
+        return toAjax(planService.disable(id));
     }
 
     /**

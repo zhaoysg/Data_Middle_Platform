@@ -23,7 +23,10 @@ import java.util.regex.Pattern;
 @Slf4j
 public abstract class AbstractRuleExecutor implements RuleExecutor {
 
+    /** 支持 ${table} 格式 */
     protected static final Pattern PLACEHOLDER_PATTERN = Pattern.compile("\\$\\{([a-zA-Z0-9_]+)}");
+    /** 支持 {{table}} 格式（避免数据库客户端将 ${} 识别为变量） */
+    protected static final Pattern DOUBLE_BRACE_PATTERN = Pattern.compile("\\{\\{([a-zA-Z0-9_]+)}}");
     protected static final int CANCEL_CHECK_INTERVAL = 100;
     private int rowCounter = 0;
 
@@ -66,22 +69,26 @@ public abstract class AbstractRuleExecutor implements RuleExecutor {
         replacements.put("threshold_hours", toSqlNumber(firstNonNull(rule.getThresholdMax(), rule.getThresholdMin())));
         replacements.put("fluctuation_threshold", toSqlNumber(rule.getFluctuationThreshold()));
 
+        // 替换 ${xxx} 和 {{xxx}} 两种格式的占位符
         for (Map.Entry<String, String> entry : replacements.entrySet()) {
             if (entry.getValue() != null) {
                 result = result.replace("${" + entry.getKey() + "}", entry.getValue());
+                result = result.replace("{{" + entry.getKey() + "}}", entry.getValue());
             }
         }
 
-        Matcher matcher = PLACEHOLDER_PATTERN.matcher(result);
-        List<String> unresolved = new ArrayList<>();
-        while (matcher.find()) {
-            String placeholder = matcher.group(1);
-            if (!unresolved.contains(placeholder)) {
-                unresolved.add(placeholder);
-            }
+        // 检查未解析的占位符（两种格式）
+        StringBuilder unresolvedBuilder = new StringBuilder();
+        Matcher m1 = PLACEHOLDER_PATTERN.matcher(result);
+        while (m1.find()) {
+            unresolvedBuilder.append("${").append(m1.group(1)).append("} ");
         }
-        if (!unresolved.isEmpty()) {
-            throw new IllegalArgumentException("Unresolved placeholders in rule SQL: " + String.join(", ", unresolved));
+        Matcher m2 = DOUBLE_BRACE_PATTERN.matcher(result);
+        while (m2.find()) {
+            unresolvedBuilder.append("{{").append(m2.group(1)).append("}} ");
+        }
+        if (unresolvedBuilder.length() > 0) {
+            throw new IllegalArgumentException("Unresolved placeholders in rule SQL: " + unresolvedBuilder);
         }
         return result;
     }

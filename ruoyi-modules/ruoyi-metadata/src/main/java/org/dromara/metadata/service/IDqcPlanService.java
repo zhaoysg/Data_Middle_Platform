@@ -46,6 +46,11 @@ public interface IDqcPlanService {
     int publish(Long id);
 
     /**
+     * 停用方案
+     */
+    int disable(Long id);
+
+    /**
      * 查询已发布的方案列表
      */
     List<DqcPlan> queryPublishedPlans();

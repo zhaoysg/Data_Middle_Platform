@@ -87,7 +87,8 @@
                 <directory>../../script/sql/migration</directory>
                 <filtering>false</filtering>
                 <includes>
-                    <include>V*.sql</include>
+                    <include>ry_bigdata_v1.sql</include>
+                    <include>ry_bigdata_v1_data.sql</include>
                 </includes>
                 <targetPath>sql/metadata</targetPath>
             </resource>

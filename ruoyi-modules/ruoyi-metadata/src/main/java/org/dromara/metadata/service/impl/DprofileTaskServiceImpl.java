@@ -1,6 +1,7 @@
 package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -23,7 +24,6 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashSet;
 import java.util.List;
@@ -38,6 +38,7 @@ import java.util.stream.Collectors;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DprofileTaskServiceImpl implements IDprofileTaskService {
 
     private final DprofileTaskMapper taskMapper;
@@ -57,7 +58,6 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public Long insertByBo(DprofileTaskBo bo) {
         DprofileTask task = new DprofileTask();
         task.setTaskCode(generateTaskCode());
@@ -80,7 +80,6 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void updateByBo(DprofileTaskBo bo) {
         if (bo.getId() == null) {
             throw new ServiceException("任务ID不能为空");
@@ -109,7 +108,6 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void deleteByIds(List<Long> ids) {
         if (ids == null || ids.isEmpty()) {
             throw new ServiceException("删除的ID列表不能为空");
@@ -127,35 +125,33 @@ public class DprofileTaskServiceImpl implements IDprofileTaskService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void startTask(Long taskId) {
-        DprofileTask task = taskMapper.selectById(taskId);
-        if (task == null) {
+        DprofileTask current = taskMapper.selectById(taskId);
+        if (current == null) {
             throw new ServiceException("任务不存在");
         }
 
-        if ("RUNNING".equals(task.getStatus())) {
+        if ("RUNNING".equals(current.getStatus())) {
             throw new ServiceException("任务已在运行中");
         }
 
-        task.setStatus("RUNNING");
-        taskMapper.updateById(task);
-        log.info("任务已启动: id={}, taskName={}", taskId, task.getTaskName());
+        current.setStatus("RUNNING");
+        taskMapper.updateById(current);
+        log.info("任务已启动: id={}, taskName={}", taskId, current.getTaskName());
 
         // 异步执行（实际生产中应使用线程池或消息队列）
         try {
             runTaskSync(taskId);
         } catch (Exception e) {
             log.error("任务执行失败: id={}, error={}", taskId, e.getMessage(), e);
-            task.setStatus("FAILED");
-            task.setLastRunStatus("FAILED");
-            task.setLastRunTime(LocalDateTime.now());
-            taskMapper.updateById(task);
+            current.setStatus("FAILED");
+            current.setLastRunStatus("FAILED");
+            current.setLastRunTime(LocalDateTime.now());
+            taskMapper.updateById(current);
         }
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public void stopTask(Long taskId) {
         DprofileTask task = taskMapper.selectById(taskId);
         if (task == null) {

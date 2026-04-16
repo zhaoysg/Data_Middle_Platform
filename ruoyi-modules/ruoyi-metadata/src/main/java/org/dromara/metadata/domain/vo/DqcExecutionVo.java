@@ -52,6 +52,11 @@ public class DqcExecutionVo implements Serializable {
     private String triggerType;
 
     /**
+     * 触发类型中文文本
+     */
+    private String triggerTypeText;
+
+    /**
      * 触发用户
      */
     private Long triggerUser;
@@ -110,6 +115,36 @@ public class DqcExecutionVo implements Serializable {
      * 状态文本
      */
     private String statusText;
+
+    /**
+     * 完整性得分（0-100）
+     */
+    private BigDecimal completenessScore;
+
+    /**
+     * 唯一性得分（0-100）
+     */
+    private BigDecimal uniquenessScore;
+
+    /**
+     * 准确性得分（0-100）
+     */
+    private BigDecimal accuracyScore;
+
+    /**
+     * 一致性得分（0-100）
+     */
+    private BigDecimal consistencyScore;
+
+    /**
+     * 时效性得分（0-100）
+     */
+    private BigDecimal timelinessScore;
+
+    /**
+     * 有效性得分（0-100）
+     */
+    private BigDecimal validityScore;
 
     /**
      * 创建时间

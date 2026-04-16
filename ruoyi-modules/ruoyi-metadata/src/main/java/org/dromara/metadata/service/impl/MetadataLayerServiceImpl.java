@@ -1,6 +1,7 @@
 package org.dromara.metadata.service.impl;
 
 import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import cn.hutool.core.util.ObjectUtil;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
@@ -18,8 +19,6 @@ import org.dromara.metadata.domain.vo.DataLayerVo;
 import org.dromara.metadata.mapper.DataLayerMapper;
 import org.dromara.metadata.service.IDataLayerService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.util.List;
 
 /**
@@ -46,7 +45,7 @@ public class MetadataLayerServiceImpl implements IDataLayerService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public Long insertLayer(DataLayerBo bo) {
         if (StringUtils.isNotBlank(bo.getLayerCode())) {
             DataLayer exist = baseMapper.selectOne(
@@ -61,7 +60,7 @@ public class MetadataLayerServiceImpl implements IDataLayerService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int updateLayer(DataLayerBo bo) {
         if (ObjectUtil.isNull(bo.getId())) {
             throw new ServiceException("分层ID不能为空");
@@ -79,7 +78,7 @@ public class MetadataLayerServiceImpl implements IDataLayerService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public int deleteLayer(Long[] ids) {
         return baseMapper.deleteBatchIds(List.of(ids));
     }

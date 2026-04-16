@@ -102,6 +102,11 @@ spring:
         # 多久检查一次连接的活性
         keepaliveTime: 30000
 
+metadata:
+  schema:
+    # 本地开发环境自动初始化 metadata/DQC 所需表结构
+    auto-init: false
+
 --- # redis 单机配置(单机与集群只能开启一个另一个需要注释掉)
 spring.data:
   redis:

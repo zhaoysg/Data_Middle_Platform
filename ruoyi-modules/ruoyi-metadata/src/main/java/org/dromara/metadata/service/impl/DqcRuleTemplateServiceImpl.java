@@ -1,5 +1,6 @@
 package org.dromara.metadata.service.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DS;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,6 +22,7 @@ import java.util.List;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DqcRuleTemplateServiceImpl implements IDqcRuleTemplateService {
 
     private final DqcRuleTemplateMapper baseMapper;

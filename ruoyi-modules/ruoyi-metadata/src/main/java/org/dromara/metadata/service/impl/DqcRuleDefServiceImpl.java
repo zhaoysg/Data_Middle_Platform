@@ -1,6 +1,8 @@
 package org.dromara.metadata.service.impl;
 
 import cn.hutool.core.util.ObjectUtil;
+import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
@@ -27,7 +29,6 @@ import org.dromara.metadata.mapper.MetadataTableMapper;
 import org.dromara.metadata.service.IDqcRuleDefService;
 import org.dromara.metadata.support.DatasourceHelper;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 import java.util.Map;
@@ -43,6 +44,7 @@ import java.util.Map;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
 
     private final DqcRuleDefMapper baseMapper;
@@ -123,11 +125,7 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
     @Override
     public List<DqcRuleDefVo> listByPlanId(Long planId) {
         // 闂傚倸鍊风粈渚€骞栭銈嗗仏妞ゆ劧绠戠壕鍧楁煙缂併垹娅橀柡浣割儐娣囧﹪濡堕崨顔兼濠碘槅鍋呴敃銏ゅ箖瀹勬壋鏋庨煫鍥ㄦ惄娴煎矂姊虹悰鈥充壕?闂傚倷娴囧畷鐢稿窗閹扮増鍋￠柕澹偓閸嬫挸顫濋悡搴♀拫閻庤娲栫紞濠囥€佸☉銏″€烽柤纰卞墻濡差垶姊虹拠鏌ヮ€楁繝鈧潏銊﹀弿鐎规洖娲ら崹?
-        List<DqcPlanRule> planRules = planRuleMapper.selectList(
-            Wrappers.<DqcPlanRule>lambdaQuery()
-                .eq(DqcPlanRule::getPlanId, planId)
-                .orderByAsc(DqcPlanRule::getSortOrder)
-        );
+        List<DqcPlanRule> planRules = planRuleMapper.selectCompatibleByPlanId(planId);
 
         if (planRules.isEmpty()) {
             return List.of();
@@ -145,7 +143,8 @@ public class DqcRuleDefServiceImpl implements IDqcRuleDefService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DS("bigdata")
+    @DSTransactional
     public int bindRules(Long planId, List<Long> ruleIds) {
         for (Long ruleId : ruleIds) {
             requireAccessibleRule(ruleId);

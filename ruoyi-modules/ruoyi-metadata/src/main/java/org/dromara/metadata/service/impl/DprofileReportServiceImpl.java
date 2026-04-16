@@ -1,6 +1,8 @@
 package org.dromara.metadata.service.impl;
 
+import com.baomidou.dynamic.datasource.toolkit.DynamicDataSourceContextHolder;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
 import org.dromara.common.core.utils.StringUtils;
@@ -30,8 +32,10 @@ import java.util.stream.Collectors;
  */
 @Service
 @RequiredArgsConstructor
+@DS("bigdata")
 public class DprofileReportServiceImpl implements IDprofileReportService {
 
+    private static final String BIGDATA_DS = "bigdata";
     private static final String TIME_PATTERN = "yyyy-MM-dd HH:mm:ss";
 
     private final DprofileReportMapper reportMapper;
@@ -42,14 +46,17 @@ public class DprofileReportServiceImpl implements IDprofileReportService {
     @Override
     public TableDataInfo<DprofileReportVo> queryPageList(DprofileReportVo vo, PageQuery pageQuery) {
         LambdaQueryWrapper<DprofileReport> wrapper = buildQueryWrapper(vo);
-        var page = reportMapper.selectVoPage(pageQuery.build(), wrapper);
+        var page = executeOnBigdata(() -> {
+            IPage<DprofileReportVo> result = reportMapper.selectVoPage(pageQuery.build(), wrapper);
+            return result;
+        });
         page.getRecords().forEach(this::fillExtraFields);
         return TableDataInfo.build(page);
     }
 
     @Override
     public DprofileReportVo queryById(Long id) {
-        DprofileReportVo vo = reportMapper.selectVoById(id);
+        DprofileReportVo vo = executeOnBigdata(() -> reportMapper.selectVoById(id));
         if (vo != null) {
             fillExtraFields(vo);
         }
@@ -58,10 +65,12 @@ public class DprofileReportServiceImpl implements IDprofileReportService {
 
     @Override
     public List<DprofileColumnReportVo> queryColumnsByReportId(Long reportId) {
-        List<DprofileColumnReportVo> list = columnReportMapper.selectVoList(
-            Wrappers.<DprofileColumnReport>lambdaQuery()
-                .eq(DprofileColumnReport::getReportId, reportId)
-                .orderByAsc(DprofileColumnReport::getId)
+        List<DprofileColumnReportVo> list = executeOnBigdata(() ->
+            columnReportMapper.selectVoList(
+                Wrappers.<DprofileColumnReport>lambdaQuery()
+                    .eq(DprofileColumnReport::getReportId, reportId)
+                    .orderByAsc(DprofileColumnReport::getId)
+            )
         );
         list.forEach(this::fillColumnExtraFields);
         return list;
@@ -90,11 +99,13 @@ public class DprofileReportServiceImpl implements IDprofileReportService {
         }
 
         if (StringUtils.isNotBlank(vo.getTaskName())) {
-            Set<Long> taskIds = taskMapper.selectList(
-                Wrappers.<DprofileTask>lambdaQuery()
-                    .select(DprofileTask::getId)
-                    .like(DprofileTask::getTaskName, vo.getTaskName())
-            ).stream().map(DprofileTask::getId).collect(Collectors.toSet());
+            Set<Long> taskIds = executeOnBigdata(() ->
+                taskMapper.selectList(
+                    Wrappers.<DprofileTask>lambdaQuery()
+                        .select(DprofileTask::getId)
+                        .like(DprofileTask::getTaskName, vo.getTaskName())
+                ).stream().map(DprofileTask::getId).collect(Collectors.toSet())
+            );
             if (taskIds.isEmpty()) {
                 wrapper.eq(DprofileReport::getId, -1L);
             } else {
@@ -107,7 +118,7 @@ public class DprofileReportServiceImpl implements IDprofileReportService {
 
     private void fillExtraFields(DprofileReportVo vo) {
         if (vo.getTaskId() != null) {
-            DprofileTask task = taskMapper.selectById(vo.getTaskId());
+            DprofileTask task = executeOnBigdata(() -> taskMapper.selectById(vo.getTaskId()));
             if (task != null) {
                 vo.setTaskName(task.getTaskName());
             }
@@ -136,5 +147,14 @@ public class DprofileReportServiceImpl implements IDprofileReportService {
 
     private String safe(String value) {
         return StringUtils.isBlank(value) ? "-" : value;
+    }
+
+    private <T> T executeOnBigdata(java.util.function.Supplier<T> supplier) {
+        DynamicDataSourceContextHolder.push(BIGDATA_DS);
+        try {
+            return supplier.get();
+        } finally {
+            DynamicDataSourceContextHolder.poll();
+        }
     }
 }

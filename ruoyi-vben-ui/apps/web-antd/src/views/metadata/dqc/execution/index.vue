@@ -29,12 +29,6 @@ const statusLabelMap: Record<string, string> = {
   STOPPED: '已停止',
 };
 
-const triggerTypeLabelMap: Record<string, string> = {
-  MANUAL: '手动',
-  SCHEDULE: '定时',
-  API: 'API调用',
-};
-
 const formOptions: VbenFormProps = {
   commonConfig: {
     labelWidth: 80,
@@ -67,11 +61,8 @@ const gridOptions: VxeGridProps = {
     { title: '方案名称', field: 'planName', width: 180 },
     {
       title: '触发方式',
-      field: 'triggerType',
+      field: 'triggerTypeText',
       width: 100,
-      formatter: ({ cellValue }: { cellValue?: string }) => {
-        return cellValue ? triggerTypeLabelMap[cellValue] || cellValue : '-';
-      },
     },
     { title: '开始时间', field: 'startTime', width: 180 },
     { title: '耗时(ms)', field: 'elapsedMs', width: 100 },
@@ -104,7 +95,9 @@ const gridOptions: VxeGridProps = {
           pageSize: page?.pageSize,
         };
         const data = await dqcExecutionList(params);
-        return data || { rows: [], total: 0 };
+        if (!data) return { rows: [], total: 0 };
+        if (Array.isArray(data)) return { rows: data, total: data.length };
+        return { rows: data.rows ?? [], total: data.total ?? 0 };
       },
     },
   },

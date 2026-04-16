@@ -1,5 +1,7 @@
 package org.dromara.metadata.service.impl;
 
+import com.baomidou.dynamic.datasource.annotation.DS;
+import com.baomidou.dynamic.datasource.annotation.DSTransactional;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.toolkit.Wrappers;
 import lombok.RequiredArgsConstructor;
@@ -17,8 +19,6 @@ import org.dromara.metadata.mapper.DqcExecutionMapper;
 import org.dromara.metadata.mapper.DqcQualityScoreMapper;
 import org.dromara.metadata.service.IDqcQualityScoreService;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
-
 import java.math.BigDecimal;
 import java.math.RoundingMode;
 import java.time.LocalDate;
@@ -32,6 +32,7 @@ import java.util.Map;
 @Slf4j
 @RequiredArgsConstructor
 @Service
+@DS("bigdata")
 public class DqcQualityScoreServiceImpl implements IDqcQualityScoreService {
 
     private final DqcQualityScoreMapper baseMapper;
@@ -78,7 +79,7 @@ public class DqcQualityScoreServiceImpl implements IDqcQualityScoreService {
     }
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
+    @DSTransactional
     public void calculateAndSaveScore(Long executionId) {
         DqcExecution execution = executionMapper.selectById(executionId);
         if (execution == null) {
@@ -114,18 +115,23 @@ public class DqcQualityScoreServiceImpl implements IDqcQualityScoreService {
             acc.dsId = detail.getTargetDsId();
             acc.tableName = detail.getTargetTable();
 
-            String dim = detail.getDimension();
-            if (dim == null) continue;
-            dim = dim.toUpperCase();
-            if (!ALL_DIMS.contains(dim)) continue;
+            String dimStr = detail.getDimension();
+            if (dimStr == null) continue;
+            boolean passed = "1".equals(detail.getPassFlag());
+            // 支持逗号分隔的多个维度，分别统计
+            String[] dims = dimStr.toUpperCase().split(",");
+            for (String raw : dims) {
+                String dim = raw.trim();
+                if (!ALL_DIMS.contains(dim)) continue;
 
-            globalDimTotal.merge(dim, 1, Integer::sum);
-            acc.dimTotal.merge(dim, 1, Integer::sum);
-            acc.totalRules++;
-            globalDimPass.merge(dim, "1".equals(detail.getPassFlag()) ? 1 : 0, Integer::sum);
-            if ("1".equals(detail.getPassFlag())) {
-                acc.dimPass.merge(dim, 1, Integer::sum);
-                acc.totalPass++;
+                globalDimTotal.merge(dim, 1, Integer::sum);
+                acc.dimTotal.merge(dim, 1, Integer::sum);
+                acc.totalRules++;
+                if (passed) {
+                    globalDimPass.merge(dim, 1, Integer::sum);
+                    acc.dimPass.merge(dim, 1, Integer::sum);
+                    acc.totalPass++;
+                }
             }
         }
 
